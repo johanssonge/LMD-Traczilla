@@ -24,6 +24,7 @@ from dateutil.relativedelta import relativedelta
 import pickle,gzip
 #import matplotlib.pyplot as plt
 import os
+import h5py
 from pyhdf.SD import SD
 from pyhdf import HDF, VS, V
 import glob
@@ -118,7 +119,8 @@ while date >= endDate:
     # Generate names of daily directories
     dirday = os.path.join(dirAProf,date.strftime('%Y/%Y_%m_%d'))
     # List the content of the daily aeorosol directory
-    fic = sorted(glob.glob(dirday+'/CAL_LID_L2_05kmAPro-*.hdf'))
+    # fic = sorted(glob.glob(dirday+'/CAL_LID_L2_05kmAPro-*.hdf'))
+    fic = sorted(glob.glob(dirday+'/CAL_LID_L2_05kmAPro-*.h*'))
     print(dirday, len(fic))
     # process all the half-orbits in the aerosol directory
     catalog[date] = {}
@@ -130,10 +132,13 @@ while date >= endDate:
         if ('ZD' in file): continue
         # open file
         try:
-            hdf = SD(file)
-            hh = HDF.HDF(file,HDF.HC.READ)
+            if file.split('.')[-1] == 'hdf':
+                hdf = SD(file)
+                hh = HDF.HDF(file,HDF.HC.READ)
+            else:
+                h5 = h5py.File(file, 'r')
         except :
-            print('HDF4 Error -> giving up')
+            print('%s Error -> giving up' %file.split('.')[-1].upper())
             continue
         # Check altitude
         meta = hh.vstart().attach('metadata')
