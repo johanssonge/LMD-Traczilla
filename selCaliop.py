@@ -34,7 +34,83 @@ import argparse
 import io107
 import pdb
 
+def readDARDAR(fname):
+    # open file
+    ncf = netCDF4.Dataset(fname,'r')
+    
+    if 'DARDAR-MASK' in fname:
+        altx = ncf.variables['CS_TRACK_Height'][:].data
+        # Reads latitudes and longitudes
+        lats = ncf.variables['CLOUDSAT_Latitude'][:].data
+        lons = ncf.variables['CLOUDSAT_Longitude'][:].data % 360
+        # Read pressure (Pa), temperature (degree K)
+        pres = ncf.variables['Pressure'][:].data
+        temp = ncf.variables['Temperature'][:].data
+        # Read time
+        tai = ncf.variables['CLOUDSAT_TAI_Time'][:].data
+        tt = Time('1993-01-01 00:00:00',scale='tai') + TimeDelta(tai, format='sec')
+        utc = tt.utc.datetime
+    else:
+        altx = ncf.variables['height'][:].data
+        print('check for unit. Needs to be km')
+        pdb.set_trace()
+        lats = ncf.variables['latitude'][:].data
+        lons = ncf.variables['longitude'][:].data % 360
+        temp = ncf.variables['temperature'][:].data
+        print('No pressure')
+        pdb.set_trace()
+        sy, sm, sd, st = ncf.variables['time'].units.split(' ')[2:-1]
+        # sh, smin, ss = st.split(':')
+        # datetime(int(sy), int(sm), int(sd), int(sh), int(smin), int(ss))
+        # np.datetime64('%s-%s-%s %s' %(sy, sm, sd, st))
+        utc = np.datetime64('%s-%s-%s %s' %(sy, sm, sd, st)) + ncf.variables['time'][:].data.astype('timedelta64[s]')
+        utc = np.asarray(utc.tolist())
+    
+    return altx, lats, lons, pres, temp, utc
+    
+    
+            
+def readCalipso(fname):
+    # open file
+    try:
+        if fname.split('.')[-1] == 'hdf':
+            hdf = SD(fname)
+            hh = HDF.HDF(fname,HDF.HC.READ)
+        else:
+            h5 = h5py.File(fname, 'r')
+            print('not prepared for h5')
+            pdb.set_trace()
+    except :
+        print('%s Error -> giving up' %fname.split('.')[-1].upper())
+        return -1, -1, -1, -1, -1, -1
 
+    # Check altitude
+    meta = hh.vstart().attach('metadata')
+    altx = np.array(meta.read()[0][meta.field('Lidar_Data_Altitudes')._idx])
+    if np.max((altx - altx_ref)**2)>1.e-5:
+        print('ACHTUNG ALARM! NON CONFORM ALTITUDE')
+        return -1, -1, -1, -1, -1, -1
+        
+    # Reads latitudes and longitudes
+    lats = hdf.select('Latitude').get()[:,1]
+    lons = hdf.select('Longitude').get()[:,1] % 360
+    
+    # Read pressure (hPa), temperature (degree C)
+    # Conversion to Pa and K
+    pres = hdf.select('Pressure').get()[:]
+    temp = hdf.select('Temperature').get()[:]
+
+    pres *= 100
+    temp += 273.15
+        
+    # Read time
+    tai = hdf.select('Profile_Time').get()[:,1]
+    tt = Time('1993-01-01 00:00:00',scale='tai') + TimeDelta(tai, format='sec')
+    utc = tt.utc.datetime
+        
+    return altx, lats, lons, pres, temp, utc
+    
+    
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
@@ -68,7 +144,10 @@ if __name__ == '__main__':
     # dirDardar = '/DATA/LIENS/CLOUDSAT/DARDAR-CLOUD.v3.10'
     dirDardar = '/DATA/LIENS/CLOUDSAT/DARDAR-MASK.v2.23/'
     #dirL1 = '/DATA/LIENS/CALIOP/CAL_LID_L1.v3.40'
-    
+    if useDardar:
+        dirSat = dirDardar
+    else:
+        dirSat = dirAProf
     
     # Latitude band
     latmin = -30
@@ -92,16 +171,21 @@ if __name__ == '__main__':
     
     # Create catalog
     catalog = {}
-    catalog_file = 'selCaliop_Calalog'+endDate.strftime('-%b%Y.pkl')
     params = {}
     params = {'enddate':endDate,'originDate':originDate,'latmin':latmin,'latmax':latmax,
               'ns':ns,
               'altx':altx_ref,'type':'night','interdate':interdate}
-    params_file =  'selCaliop_Params'+endDate.strftime('-%b%Y.pkl')
+    if useDardar:
+        catalog_file = 'selDardar_Calalog'+endDate.strftime('-%b%Y.pkl')
+        params_file =  'selDardar_Params'+endDate.strftime('-%b%Y.pkl')
+        part0_file = endDate.strftime('part_000-%b%Y-DD')
+    else:
+        catalog_file = 'selCaliop_Calalog'+endDate.strftime('-%b%Y.pkl')
+        params_file =  'selCaliop_Params'+endDate.strftime('-%b%Y.pkl')
+        part0_file = endDate.strftime('part_000-%b%Y')
     
     # Generate the dictionary to be used to write part_000
     part0 = {}
-    part0_file = endDate.strftime('part_000-%b%Y')
     # Heading data
     part0['lhead'] = 3
     part0['outnfmt'] = 107
@@ -129,136 +213,74 @@ if __name__ == '__main__':
     
     while date >= endDate:
         # Generate names of daily directories
-        dirday = os.path.join(dirAProf,date.strftime('%Y/%Y_%m_%d'))
-        dirdayD = os.path.join(dirDardar,date.strftime('%Y/%Y_%m_%d'))
+        dirday = os.path.join(dirSat,date.strftime('%Y/%Y_%m_%d'))
         # List the content of the daily aeorosol directory
-        # fic = sorted(glob.glob(dirday+'/CAL_LID_L2_05kmAPro-*.hdf'))
-        fic = sorted(glob.glob(dirday+'/CAL_LID_L2_05kmAPro-*.h*'))
-        # ficD = sorted(glob.glob(dirdayD+'/DARDAR-CLOUD*.nc'))
-        ficD = sorted(glob.glob(dirdayD+'/DARDAR-MASK*.nc'))
+        if useDardar:
+            # fic = sorted(glob.glob(dirday+'/DARDAR-CLOUD*.nc'))
+            fic = sorted(glob.glob(dirday+'/DARDAR-MASK*.nc'))
+        else:
+            # fic = sorted(glob.glob(dirday+'/CAL_LID_L2_05kmAPro-*.hdf'))
+            fic = sorted(glob.glob(dirday+'/CAL_LID_L2_05kmAPro-*.h*'))
         print(dirday, len(fic))
-        print(dirdayD, len(ficD))
         # process all the half-orbits in the aerosol directory
         catalog[date] = {}
-        for i in range(len(fic)):
-            # pop file
-            file = fic.pop()
+        for filename in fic:
             #print(file)
-            # skip day files
-            if ('ZD' in file): continue
-            # open file
-            try:
-                if file.split('.')[-1] == 'hdf':
-                    hdf = SD(file)
-                    hh = HDF.HDF(file,HDF.HC.READ)
-                else:
-                    h5 = h5py.File(file, 'r')
-            except :
-                print('%s Error -> giving up' %file.split('.')[-1].upper())
+            if useDardar:
+                altx, lats, lons, pres, temp, utc = readDARDAR(filename)
+            else:
+                # skip day files
+                if ('ZD' in filename):
+                    continue
+                altx, lats, lons, pres, temp, utc = readCalipso(filename)
+            
+            if isinstance(altx, int) and (altx == -1):
                 continue
-            # Check altitude
-            ncf = netCDF4.Dataset(ficD[i],'r')
-            meta = hh.vstart().attach('metadata')
-            altx = np.array(meta.read()[0][meta.field('Lidar_Data_Altitudes')._idx])
-            if np.max((altx - altx_ref)**2)>1.e-5:
-                print('ACHTUNG ALARM! NON CONFORM ALTITUDE')
-                continue
-            # altxD = ncf.variables['height'][:].data
-            altxD = ncf.variables['CS_TRACK_Height'][:].data
             
             #: calculate height levels
             #: first element below 20 km
             l20 = np.where(altx<20)[0][0]
-            l20D = np.where(altxD<20)[0][0]
             #: last element above 14 km
             l14 = np.where(altx>14)[0][-1]
-            l14D = np.where(altxD>14)[0][-1]
             #: The interval is 59.8755 m
             #: Use 180 m height points
             intlev = round(0.180 / (altx[0] - altx[1]))
-            intlevD = round(0.180 / (altxD[0] - altxD[1]))
             #: range of altitudes
             altidx = np.arange(l20,l14+1,intlev)
-            altidxD = np.arange(l20D,l14D+1,intlevD)
             nlev = len(altidx)
-            nlevD = len(altidxD)
             
-            
-            
-            # Reads latitudes and longitudes
-            lats = hdf.select('Latitude').get()[:,1]
-            lons = hdf.select('Longitude').get()[:,1] % 360
-            
-            # latsD = ncf.variables['latitude'][:].data
-            # lonsD = ncf.variables['longitude'][:].data % 360
-            latsD = ncf.variables['CLOUDSAT_Latitude'][:].data
-            lonsD = ncf.variables['CLOUDSAT_Longitude'][:].data % 360
-            
-            # Read pressure (hPa), temperature (degree C)
-            # Conversion to Pa and K
-            pres = hdf.select('Pressure').get()[:]
-            temp = hdf.select('Temperature').get()[:]
-    
-            pres *= 100
-            temp += 273.15
-            
-            # tempD = ncf.variables['temperature'][:].data
-            presD = ncf.variables['Pressure'][:].data
-            tempD = ncf.variables['Temperature'][:].data
-            # Read time
-            tai = hdf.select('Profile_Time').get()[:,1]
-            tt = Time('1993-01-01 00:00:00',scale='tai') + TimeDelta(tai, format='sec')
-            utc = tt.utc.datetime
-    
-            # sy, sm, sd, st = ncf.variables['time'].units.split(' ')[2:-1]
-            # sh, smin, ss = st.split(':')
-            # datetime(int(sy), int(sm), int(sd), int(sh), int(smin), int(ss))
-            # np.datetime64('%s-%s-%s %s' %(sy, sm, sd, st))
-            # utcD = np.datetime64('%s-%s-%s %s' %(sy, sm, sd, st)) + ncf.variables['time'][:].data.astype('timedelta64[s]')
-            # utcD = np.asarray(utcD.tolist())
-            taiD = ncf.variables['CLOUDSAT_TAI_Time'][:].data
-            ttD = Time('1993-01-01 00:00:00',scale='tai') + TimeDelta(taiD, format='sec')
-            utcD = ttD.utc.datetime
             # Selection of the latitude range and sampling every ns
             sel = np.where((lats>latmin) & (lats<latmax))[0][0:-1:ns]
-            if len(sel) == 0: continue
-            selD = np.where((latsD>latmin) & (latsD<latmax))[0][0:-1:ns]
-            if len(selD) == 0: continue
+            if len(sel) == 0:
+                continue
             # Selection of the 1D data
             lats = lats[sel]
             lons = lons[sel]
             utc = utc[sel]
-            latsD = latsD[selD]
-            lonsD = lonsD[selD]
-            utcD = utcD[selD]
 
             ir_start = np.array([int((utc[i] - originDate).total_seconds()) for i in range(len(utc))])
-            ir_startD = np.array([int((utcD[i] - originDate).total_seconds()) for i in range(len(utcD))])
             # Selection of the 2D data
             pres = pres[sel,:][:,altidx]
             temp = temp[sel,:][:,altidx]
-            presD = presD[selD,:][:,altidxD]
-            tempD = tempD[selD,:][:,altidxD]
             # Expand the 1D fields
             ir_start = np.repeat(ir_start,nlev).astype(int)
             lats = np.repeat(lats,nlev)
             lons = np.repeat(lons,nlev)
-            ir_startD = np.repeat(ir_startD,nlevD).astype(int)
-            latsD = np.repeat(latsD,nlevD)
-            lonsD = np.repeat(lonsD,nlevD)
             # Unidimensionalize the 2D fields
             npart = nlev * len(sel)
             pres = np.reshape(pres,npart)
             temp = np.reshape(temp,npart)
-            npartD = nlevD * len(selD)
-            presD = np.reshape(presD,npartD)
-            tempD = np.reshape(tempD,npartD)
     
-            pdb.set_trace()
             # Enrich the catalog
-            fname = os.path.basename(file)
+            fname = os.path.basename(filename)
             # extract orbit
-            orbit = fname[35:-4]
+            if useDardar:
+                #: Really granule
+                orbit = fname.split('_')[2]
+            else:
+                #: Really date and time
+                orbit = fname[35:-4]
+                
             catalog[date][orbit] = {'type':'night','longitudes':[lons[0],lons[-1]],
                                     'utc':[utc[0],utc[-1]],'selection':sel,'lensel':len(sel),
                                     'npart':npart}
