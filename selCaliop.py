@@ -77,15 +77,15 @@ if __name__ == '__main__':
     # Horizontal spacing in 5 km units
     ns = 2 # that is 10 km
     
-    # first element below 20 km
-    l20 = 57
-    # last element above 14 km
-    l14 = 156
-    # The interval is 59.8755 m
-    intlev = 3
-    # range of altitudes every 3 points (about 180 m)
-    altidx = np.arange(l20,l14+1,intlev)
-    nlev = len(altidx)
+    # # first element below 20 km
+    # l20 = 57
+    # # last element above 14 km
+    # l14 = 156
+    # # The interval is 59.8755 m
+    # intlev = 3
+    # # range of altitudes every 3 points (about 180 m)
+    # altidx = np.arange(l20,l14+1,intlev)
+    # nlev = len(altidx)
     
     altx_ref = pickle.load(open('alx_ref.pkl','rb'))
     altx_ref = np.array(altx_ref)
@@ -95,7 +95,7 @@ if __name__ == '__main__':
     catalog_file = 'selCaliop_Calalog'+endDate.strftime('-%b%Y.pkl')
     params = {}
     params = {'enddate':endDate,'originDate':originDate,'latmin':latmin,'latmax':latmax,
-              'ns':ns,'toplev':l20,'botlev':l14,'intlev':intlev,'nlev':nlev,
+              'ns':ns,
               'altx':altx_ref,'type':'night','interdate':interdate}
     params_file =  'selCaliop_Params'+endDate.strftime('-%b%Y.pkl')
     
@@ -165,6 +165,26 @@ if __name__ == '__main__':
                 continue
             # altxD = ncf.variables['height'][:].data
             altxD = ncf.variables['CS_TRACK_Height'][:].data
+            
+            #: calculate height levels
+            #: first element below 20 km
+            l20 = np.where(altx<20)[0][0]
+            l20D = np.where(altxD<20)[0][0]
+            #: last element above 14 km
+            l14 = np.where(altx>14)[0][-1]
+            l14D = np.where(altxD>14)[0][-1]
+            #: The interval is 59.8755 m
+            #: Use 180 m height points
+            intlev = round(0.180 / (altx[0] - altx[1]))
+            intlevD = round(0.180 / (altxD[0] - altxD[1]))
+            #: range of altitudes
+            altidx = np.arange(l20,l14+1,intlev)
+            altidxD = np.arange(l20D,l14D+1,intlevD)
+            nlev = len(altidx)
+            nlevD = len(altidxD)
+            
+            
+            
             # Reads latitudes and longitudes
             lats = hdf.select('Latitude').get()[:,1]
             lons = hdf.select('Longitude').get()[:,1] % 360
@@ -249,6 +269,10 @@ if __name__ == '__main__':
     params['numpart'] = numpart
     params['lensel'] = len(sel)
     params['npart'] = npart
+    params.update({'toplev':l20})
+    params.update({'botlev':l14})
+    params.update({'intlev':intlev})
+    params.update({'nlev':nlev})
     with gzip.open(catalog_file,'wb') as f:
         pickle.dump(catalog,f)
     with open(params_file,'wb') as f:
