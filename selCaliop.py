@@ -219,27 +219,42 @@ if __name__ == '__main__':
             taiD = ncf.variables['CLOUDSAT_TAI_Time'][:].data
             ttD = Time('1993-01-01 00:00:00',scale='tai') + TimeDelta(taiD, format='sec')
             utcD = ttD.utc.datetime
-            pdb.set_trace()
             # Selection of the latitude range and sampling every ns
             sel = np.where((lats>latmin) & (lats<latmax))[0][0:-1:ns]
             if len(sel) == 0: continue
+            selD = np.where((latsD>latmin) & (latsD<latmax))[0][0:-1:ns]
+            if len(selD) == 0: continue
             # Selection of the 1D data
             lats = lats[sel]
             lons = lons[sel]
             utc = utc[sel]
+            latsD = latsD[selD]
+            lonsD = lonsD[selD]
+            utcD = utcD[selD]
+
             ir_start = np.array([int((utc[i] - originDate).total_seconds()) for i in range(len(utc))])
+            ir_startD = np.array([int((utcD[i] - originDate).total_seconds()) for i in range(len(utcD))])
             # Selection of the 2D data
             pres = pres[sel,:][:,altidx]
             temp = temp[sel,:][:,altidx]
+            presD = presD[selD,:][:,altidxD]
+            tempD = tempD[selD,:][:,altidxD]
             # Expand the 1D fields
             ir_start = np.repeat(ir_start,nlev).astype(int)
             lats = np.repeat(lats,nlev)
             lons = np.repeat(lons,nlev)
+            ir_startD = np.repeat(ir_startD,nlevD).astype(int)
+            latsD = np.repeat(latsD,nlevD)
+            lonsD = np.repeat(lonsD,nlevD)
             # Unidimensionalize the 2D fields
             npart = nlev * len(sel)
             pres = np.reshape(pres,npart)
             temp = np.reshape(temp,npart)
+            npartD = nlevD * len(selD)
+            presD = np.reshape(presD,npartD)
+            tempD = np.reshape(tempD,npartD)
     
+            pdb.set_trace()
             # Enrich the catalog
             fname = os.path.basename(file)
             # extract orbit
