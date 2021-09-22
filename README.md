@@ -12,4 +12,9 @@ part_000-MonYYYY - start file for Traczilla - copy to ciclad and rename to part_
 selCaliop_Params-MonYYYY.pkl - 
 selDardar_Calalog-May2019.pkl - 
 
+#: createFlexpartFiles.py
+Creates the pathfiles and qsub files needed to run trazilla
 
+
+#: convsrcErikFullGridSatTropo.py
+Handles the results from trazilla
