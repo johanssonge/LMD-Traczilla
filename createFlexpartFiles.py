@@ -1,6 +1,5 @@
-#!/usr/bin/env python
-# -*- coding: utf - 8 -*-
-
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 '''
 
@@ -14,7 +13,7 @@ Copyright (c) 2021 Erik Johansson
 
 '''
 
-import numpy as np
+import numpy as np  # @UnusedImport
 import pdb
 import calendar
 import os
@@ -22,6 +21,7 @@ import sys
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument("-d","--use_dardar",action='store_true',default=False,help="Use DARDAR data")
     parser.add_argument("-y","--year", type=int, default=2018,  
                         help="year. Default=2018")
     parser.add_argument("-m","--month", type=int, default=6, 
@@ -30,6 +30,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     year = args.year
     mon = args.month
+    useDardar = args.use_dardar
     
     
     if mon == 12:
@@ -59,12 +60,24 @@ if __name__ == '__main__':
     pathfn = '%s/path-CALIOP-EAD-%d-%02d'  %(runDir, year, mon)
 
     outpath = '%s/CALIOP-EAD-%s%d' %(outDir, abr, year)
-    outlink = '%s/part_000' %outpath
     srclink = '%s/CALIOP-EAD/part_000-%s%d' %(outDir, abr, year)
     
     optPath = '%s/CALIOP-EAD-%s%d' %(optDir, abr, year)
-    link_Relise = '%s/RELEASES' %optPath
     src_Relise = '%s/RELEASES' %optDir
+    
+    trazilla_outfn = '%s/traczilla-CALIOP-EAD-%d-%02d' %(runDir, year, mon)
+    jobbname = '%s/O-${PBS_JOBNAME}' %runDir
+    if useDardar:
+        dofn = dofn + '-DD'
+        pathfn = pathfn + '-DD'
+        jobbname = jobbname + 'DD'
+        trazilla_outfn = trazilla_outfn + '-DD'
+        srclink = srclink + '-DD'
+        outpath = outpath + '_DD'
+        optPath = optPath + '_DD'
+
+    outlink = '%s/part_000' %outpath
+    link_Relise = '%s/RELEASES' %optPath
     commandfn = '%s/COMMAND' %optPath
     
     print(dofn)
@@ -73,7 +86,7 @@ if __name__ == '__main__':
     dof.writelines('#PBS -q day \n')
     dof.writelines('#PBS -l nodes=1:ppn=16 -l mem=5gb -l vmem=5gb \n')
     dof.writelines('#PBS -N %s%d \n' %(abr, year))
-    dof.writelines('#PBS -o %s/O-${PBS_JOBNAME} \n' %runDir)
+    dof.writelines('#PBS -o %s \n' %jobbname)
     dof.writelines('#PBS -j oe \n')
     dof.writelines('\n')
     dof.writelines('module load pgi/2016 \n')
@@ -81,7 +94,7 @@ if __name__ == '__main__':
     dof.writelines('\n')
     dof.writelines('export OMP_NUM_THREADS=16 \n')
     dof.writelines('export OMP_SCHEDULE="GUIDED,10000" \n')
-    dof.writelines('/home/legras/flexpart/new6-devel/TRACZILLA-TT-par-ng %s > %s/traczilla-CALIOP-EAD-%d-%02d \n' %(pathfn, runDir, year, mon))
+    dof.writelines('/home/legras/flexpart/new6-devel/TRACZILLA-TT-par-ng %s > %s \n' %(pathfn, trazilla_outfn))
     dof.writelines('\n')
     dof.close()
     
