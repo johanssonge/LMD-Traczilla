@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Main code to analyse the convective sources of the air sampled by CALIOP
