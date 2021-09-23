@@ -34,7 +34,7 @@ import argparse
 import io107
 import pdb
 
-def readDARDAR(fname):
+def readDARDAR(fname, dn):
     # open file
     ncf = netCDF4.Dataset(fname,'r')
     
@@ -50,6 +50,19 @@ def readDARDAR(fname):
         tai = ncf.variables['CLOUDSAT_TAI_Time'][:].data
         tt = Time('1993-01-01 00:00:00',scale='tai') + TimeDelta(tai, format='sec')
         utc = tt.utc.datetime
+        #: Cloud Mask
+        clm = ncf.variables['CLOUDSAT_2B_GEOPROF_CPR_Cloud_Mask']
+        
+        #: Day/night
+        dn_var = ncf.variables['CALIOP_Day_Night_Flag'][:].data
+        #: 1 = night
+        #: 0 = day
+        if dn == 'n':
+            dnf = dn_var.astype(bool)
+        elif dn == 'd':
+            dnf = ~(dn_var.astype(bool))
+        else:
+            dnf = np.ones(dn_var.shape).astype(bool)
     else:
         altx = ncf.variables['height'][:].data
         print('check for unit. Needs to be km')
@@ -66,7 +79,16 @@ def readDARDAR(fname):
         utc = np.datetime64('%s-%s-%s %s' %(sy, sm, sd, st)) + ncf.variables['time'][:].data.astype('timedelta64[s]')
         utc = np.asarray(utc.tolist())
     
-    return altx, lats, lons, pres, temp, utc
+    #: 1D
+    lats = lats[dnf]
+    lons = lons[dnf]
+    utc = utc[dnf]
+    #: 2D
+    pres = pres[dnf, :]
+    temp = temp[dnf, :]
+    clm = clm[dnf, :]
+
+    return altx, lats, lons, pres, temp, utc, clm
     
     
             
@@ -77,7 +99,7 @@ def readCalipso(fname):
             hdf = SD(fname)
             hh = HDF.HDF(fname,HDF.HC.READ)
         else:
-            h5 = h5py.File(fname, 'r')
+            h5 = h5py.File(fname, 'r')  # @UnusedVariable
             print('not prepared for h5')
             pdb.set_trace()
     except :
@@ -148,6 +170,8 @@ if __name__ == '__main__':
         dirSat = dirDardar
     else:
         dirSat = dirAProf
+    #: day (d) / Night (n) / All (a)
+    dn = 'n'
     
     # Latitude band
     latmin = -30
@@ -155,7 +179,7 @@ if __name__ == '__main__':
     
     # Horizontal spacing in 5 km units
     ns = 2 # that is 10 km
-    
+    #
     # # first element below 20 km
     # l20 = 57
     # # last element above 14 km
@@ -166,6 +190,18 @@ if __name__ == '__main__':
     # altidx = np.arange(l20,l14+1,intlev)
     # nlev = len(altidx)
     
+    
+    
+    catalogdir = './Catalog'
+    if not os.path.isdir(catalogdir):
+        os.makedirs(catalogdir)
+    paramdir = './Param'
+    if not os.path.isdir(paramdir):
+        os.makedirs(paramdir)
+    partdir = 'Part'
+    if not os.path.isdir(partdir):
+        os.makedirs(partdir)
+    
     altx_ref = pickle.load(open('alx_ref.pkl','rb'))
     altx_ref = np.array(altx_ref)
     
@@ -175,14 +211,13 @@ if __name__ == '__main__':
     params = {'enddate':endDate,'originDate':originDate,'latmin':latmin,'latmax':latmax,
               'ns':ns,
               'altx':altx_ref,'type':'night','interdate':interdate}
+    catalog_file = '%s/selCaliop_Calalog' %(catalogdir) + endDate.strftime('-%b%Y.pkl')
+    params_file =  '%s/selCaliop_Params' + endDate.strftime('-%b%Y.pkl')
+    part0_file = '%s/part_000' + endDate.strftime('-%b%Y')
     if useDardar:
-        catalog_file = 'selDardar_Calalog'+endDate.strftime('-%b%Y.pkl')
-        params_file =  'selDardar_Params'+endDate.strftime('-%b%Y.pkl')
-        part0_file = endDate.strftime('part_000-%b%Y-DD')
-    else:
-        catalog_file = 'selCaliop_Calalog'+endDate.strftime('-%b%Y.pkl')
-        params_file =  'selCaliop_Params'+endDate.strftime('-%b%Y.pkl')
-        part0_file = endDate.strftime('part_000-%b%Y')
+        catalog_file = catalog_file.replace('/selCaliop_', '/selDardar_')
+        params_file = params_file.replace('/selCaliop_', 'selDardar_')
+        part0_file = part0_file + '-DD'
     
     # Generate the dictionary to be used to write part_000
     part0 = {}
@@ -227,7 +262,7 @@ if __name__ == '__main__':
         for filename in fic:
             #print(file)
             if useDardar:
-                altx, lats, lons, pres, temp, utc = readDARDAR(filename)
+                altx, lats, lons, pres, temp, utc, clm = readDARDAR(filename, dn)
             else:
                 # skip day files
                 if ('ZD' in filename):
