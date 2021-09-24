@@ -136,9 +136,11 @@ def readCalipso(fname):
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d","--use_dardar",action='store_true',default=False,help="Use DARDAR data")
-    parser.add_argument("-y","--year",type=int,default=2017,help="year")
-    parser.add_argument("-m","--month",type=int,choices=1+np.arange(12),default=8,help="month")
+    parser.add_argument("-d","--use_dardar", action='store_true', default=False, help="Use DARDAR data")
+    parser.add_argument("-y","--year",type=int, default=2017, help="year")
+    parser.add_argument("-m","--month",type=int, choices=1+np.arange(12), default=8, help="month")
+    parser.add_argument("-n","--night",type=str, default='a', 
+                        help="pixlar with day (d), night (n) or all (a). Default = a")
     #parser.add_argument("-d","--day",type=int,choices=1+np.arange(31),help="day0")
     
     #: Default parameters
@@ -151,6 +153,17 @@ if __name__ == '__main__':
     year = args.year
     month = args.month
     useDardar = args.use_dardar
+    #: day (d) / Night (n) / All (a)
+    if (args.night == 'n'):
+        dn = args.night
+        dntype = 'night'
+    elif (args.night == 'd'):
+        dn = args.night
+        dntype = 'day'
+    else:
+        dn = 'a'
+        dntype = '24h'
+    
     # if args.year is not None: year = args.year
     # if args.month is not None: month = args.month
     # Define dates and date interval
@@ -170,27 +183,15 @@ if __name__ == '__main__':
         dirSat = dirDardar
     else:
         dirSat = dirAProf
-    #: day (d) / Night (n) / All (a)
-    dn = 'n'
     
     # Latitude band
     latmin = -30
     latmax = 45
     
-    # Horizontal spacing in 5 km units
-    ns = 2 # that is 10 km
-    #
-    # # first element below 20 km
-    # l20 = 57
-    # # last element above 14 km
-    # l14 = 156
-    # # The interval is 59.8755 m
-    # intlev = 3
-    # # range of altitudes every 3 points (about 180 m)
-    # altidx = np.arange(l20,l14+1,intlev)
-    # nlev = len(altidx)
-    
-    
+    #: Use every second datapoint. 
+    #: This mean 10km Horizontal spacing in 5 km units
+    #: and 2km Horizontal spacing in 1 km units
+    ns = 2    
     
     catalogdir = './Catalog'
     if not os.path.isdir(catalogdir):
@@ -198,7 +199,7 @@ if __name__ == '__main__':
     paramdir = './Param'
     if not os.path.isdir(paramdir):
         os.makedirs(paramdir)
-    partdir = 'Part'
+    partdir = './Part'
     if not os.path.isdir(partdir):
         os.makedirs(partdir)
     
@@ -210,15 +211,14 @@ if __name__ == '__main__':
     params = {}
     params = {'enddate':endDate,'originDate':originDate,'latmin':latmin,'latmax':latmax,
               'ns':ns,
-              'altx':altx_ref,'type':'night','interdate':interdate}
-    catalog_file = '%s/selCaliop_Calalog' %(catalogdir) + endDate.strftime('-%b%Y.pkl')
-    params_file =  '%s/selCaliop_Params' + endDate.strftime('-%b%Y.pkl')
-    part0_file = '%s/part_000' + endDate.strftime('-%b%Y')
+              'altx':altx_ref,'type': dntype,'interdate':interdate}
+    catalog_file = '%s/selCaliop_Calalog-%s-%s.pkl' %(catalogdir, endDate.strftime('%b%Y'), dn)
+    params_file =  '%s/selCaliop_Params-%s-%s.pkl' %(paramdir, endDate.strftime('%b%Y'), dn)
+    part0_file = '%s/part_000-%s-%s' %(partdir, endDate.strftime('%b%Y'), dn)
     if useDardar:
         catalog_file = catalog_file.replace('/selCaliop_', '/selDardar_')
-        params_file = params_file.replace('/selCaliop_', 'selDardar_')
+        params_file = params_file.replace('/selCaliop_', '/selDardar_')
         part0_file = part0_file + '-DD'
-    
     # Generate the dictionary to be used to write part_000
     part0 = {}
     # Heading data
@@ -264,8 +264,10 @@ if __name__ == '__main__':
             if useDardar:
                 altx, lats, lons, pres, temp, utc, clm = readDARDAR(filename, dn)
             else:
-                # skip day files
-                if ('ZD' in filename):
+                # skip day/night files
+                if (dn == 'n') and ('ZD' in filename):
+                    continue
+                if (dn == 'd') and ('ZN' in filename):
                     continue
                 altx, lats, lons, pres, temp, utc = readCalipso(filename)
             
@@ -316,7 +318,7 @@ if __name__ == '__main__':
                 #: Really date and time
                 orbit = fname[35:-4]
                 
-            catalog[date][orbit] = {'type':'night','longitudes':[lons[0],lons[-1]],
+            catalog[date][orbit] = {'type':dntype,'longitudes':[lons[0],lons[-1]],
                                     'utc':[utc[0],utc[-1]],'selection':sel,'lensel':len(sel),
                                     'npart':npart}
             print(date,orbit,len(sel),npart)
