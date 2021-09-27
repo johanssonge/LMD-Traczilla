@@ -27,6 +27,9 @@ import argparse
 import psutil
 import flammkuchen as fk
 from scipy.interpolate import RegularGridInterpolator
+import pdb
+
+sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
 from ECMWF_N import ECMWF
 import geosat
 #import constants as cst
@@ -69,8 +72,14 @@ blacklist = []
 def main():
     global IDX_ORGN
     parser = argparse.ArgumentParser()
-    parser.add_argument("-y","--year",type=int,help="year")
-    parser.add_argument("-m","--month",type=int,choices=1+np.arange(12),help="month")
+    parser.add_argument("-d","--use_dardar", action='store_true', default = False, 
+                        help = "Use DARDAR data")
+    parser.add_argument("-y","--year", type = int, default = 2018,  
+                        help = "year. Default = 2018")
+    parser.add_argument("-m", "--month", type=int, choices=np.arange(1, 13), default=6, 
+                        help = "Month. Default = 6")
+    parser.add_argument("-n", "--night", type=str, choices=["d","n", "a"], default='a', 
+                        help = "pixlar with day (d), night (n) or all (a). Default = a")
     #parser.add_argument("-d1","--day1",type=int,choices=1+np.arange(31),help="day1")
     #parser.add_argument("-d2","--day2",type=int,choices=1+np.arange(31),help="day2")
     #parser.add_argument("-a","--advect",type=str,choices=["OPZ","EAD","EAZ","EID","EIZ"],help="source of advecting winds")
@@ -80,22 +89,25 @@ def main():
     parser.add_argument("-t","--step",type=int,help="step in hour between two part files")
     #parser.add_argument("-k","--diffus",type=str,choices=['0','01','1','001'],help='diffusivity parameter')
     parser.add_argument("-v","--vshift",type=int,choices=[0,10],help='vertical shift')
-    parser.add_argument("-hm","--hmax",type=int,help='maximum considered integration time')
+    parser.add_argument("-hm","--hmax",type=int, help='maximum considered integration time')
+
+    args = parser.parse_args()
     
     # to be updated
     # Define main directories
     if 'ciclad' in socket.gethostname():
         #main_sat_dir = '/data/legras/flexpart_in/SAFNWC'
             #SVC_Dir = '/bdd/CFMIP/SEL2'
-        traj_dir = '/data/ejohansson/flexout/STC/Calipso'
-        out_dir = '/data/legras/STC/Calipso-OUT'
+        datPath = os.environ['HOME'].replace('/home/', '/data/')
+        traj_dir = '%s/flexout/STC/Calipso' %datPath
+        out_dir = '%s/flexout/STC/Calipso-OUT' %datPath
         #out_dir = '/data/legras/STC'
     elif ('climserv' in socket.gethostname()) | ('polytechnique' in socket.gethostname()):
         traj_dir = '/data/ejohansson/flexout/STC/Calipso'
         out_dir = '/homedata/legras/STC/Calipso-OUT'
     else:
         print ('CANNOT RECOGNIZE HOST - DO NOT RUN ON NON DEFINED HOSTS')
-        exit()  
+        exit()
 
     """ Parameters """
     step = 3
@@ -108,8 +120,8 @@ def main():
     nb_slices = int(dstep/slice_width)
     # default values of parameters
     # date of the flight
-    year=2008
-    month=7
+    year = args.year
+    month = args.month
     #day1=1
     #day2=31
     age_bound = 41.75
@@ -122,9 +134,6 @@ def main():
     super =''
     dtRange = timedelta(hours=step)
     print('Parsing')
-    args = parser.parse_args()
-    if args.year is not None: year=args.year
-    if args.month is not None: month=args.month
     #if args.advect is not None: advect=args.advect
     #if args.day1 is not None: day1 = args.day1
     #if args.day2 is not None: day2 = args.day2
@@ -145,21 +154,25 @@ def main():
 
     # Update the out_dir with the cloud type and the super paramater
     #out_dir = os.path.join(out_dir,'SVC-OUT-GridSat'+super)
-    try:
-        os.mkdir(out_dir)
-        os.mkdir(out_dir+'/out')
-    except:
+    if not os.path.isdir(out_dir):
+        os.makedirs(out_dir)
+    if not os.path.isdir(out_dir + '/out'):
+        os.makedirs(out_dir + '/out')
+    else:    
         print('out_dir directory already created')    
-    
     # Dates beginning and end
     #date_beg = datetime(year=year, month=month, day=day1, hour=0)
     date_end = datetime(year=year, month=month, day=1, hour=0)
-
+    
+    #: filename of outfiles
+    outnames = 'CALIOP-'+advect+'-'+date_end.strftime('%b%Y')+diffus+'-%s' %args.night 
+    if args.use_dardar:
+        outnames = outnames + '-DD'
     # Manage the file that receives the print output
     if quiet:
         # Output file      
         #print_file = os.path.join(out_dir,'out','BACK-SVC-EAD-'+date_beg.strftime('%b-%Y-day%d-')+date_end.strftime('%d-D01')+'.out')
-        print_file = os.path.join(out_dir,'out','CALIOP-'+advect+'-'+date_end.strftime('%b%Y')+diffus+'.out')
+        print_file = os.path.join(out_dir,'out',outnames+'.out')
         fsock = open(print_file,'w')
         sys.stdout=fsock
 
@@ -176,10 +189,10 @@ def main():
 
     # Directories of the backward trajectories and name of the output file
     #ftraj = os.path.join(traj_dir,'BACK-SVC-EAD-'+date_beg.strftime('%b-%Y-day%d-')+date_end.strftime('%d-D01'))    
-    ftraj = os.path.join(traj_dir,'CALIOP-'+advect+'-'+date_end.strftime('%b%Y')+diffus) 
+    ftraj = os.path.join(traj_dir,outnames) 
     #out_file2 = os.path.join(out_dir,'BACK-SVC-EAD-'+date_beg.strftime('%b-%Y-day%d-')+date_end.strftime('%d-D01')+'.hdf5')
-    out_file2 = os.path.join(out_dir,'CALIOP-'+advect+'-'+date_end.strftime('%b%Y')+diffus+'.hdf5')
-
+    out_file2 = os.path.join(out_dir,outnames+'.h5')
+    pdb.set_trace()
     """ Initialization of the calculation """
     # Initialize the dictionary of the parcel dictionaries
     partStep={}
