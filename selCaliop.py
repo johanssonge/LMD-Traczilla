@@ -138,11 +138,14 @@ def readCalipso(fname):
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d","--use_dardar", action='store_true', default=False, help="Use DARDAR data")
-    parser.add_argument("-y","--year",type=int, default=2017, help="year")
-    parser.add_argument("-m","--month",type=int, choices=1+np.arange(12), default=8, help="month")
-    parser.add_argument("-n","--night",type=str, default='a', 
-                        help="pixlar with day (d), night (n) or all (a). Default = a")
+    parser.add_argument("-d", "--use_dardar", action='store_true', default=False, 
+                        help = "Use DARDAR data")
+    parser.add_argument("-y", "--year", type = int, default = 2018,  
+                        help = "year. Default = 2018")
+    parser.add_argument("-m", "--month", type = int, choices=np.arange(1, 13), default = 6, 
+                        help = "Month. Default = 6")
+    parser.add_argument("-n", "--night", type=str, choices=["d", "n", "a"], default = 'a', 
+                        help = "pixlar with day (d), night (n) or all (a). Default = a")
     #parser.add_argument("-d","--day",type=int,choices=1+np.arange(31),help="day0")
     
     #: Default parameters
@@ -156,14 +159,12 @@ if __name__ == '__main__':
     month = args.month
     useDardar = args.use_dardar
     #: day (d) / Night (n) / All (a)
-    if (args.night == 'n'):
-        dn = args.night
+    dn = args.night
+    if (dn == 'n'):
         dntype = 'night'
-    elif (args.night == 'd'):
-        dn = args.night
+    elif (dn == 'd'):
         dntype = 'day'
     else:
-        dn = 'a'
         dntype = '24h'
     
     # if args.year is not None: year = args.year
