@@ -26,12 +26,15 @@ if __name__ == '__main__':
                         help="year. Default=2018")
     parser.add_argument("-m","--month", type=int, default=6, 
                         help="Month. Default=6")
+    parser.add_argument("-n","--night",type=str, default='a', 
+                        help="pixlar with day (d), night (n) or all (a). Default = a")
    
     args = parser.parse_args()
     year = args.year
     mon = args.month
     useDardar = args.use_dardar
-    
+    #: Day / night / 24h
+    dnf = args.night
     
     if mon == 12:
         year_p1 = year + 1
@@ -55,31 +58,46 @@ if __name__ == '__main__':
     runDir = '/home/ejohansson/Projects/flexpart/work/STC/Calipso'
     optDir = '/home/ejohansson/Projects/flexpart/traczilla/options/STC/Calipso'
     outDir = '/data/ejohansson/flexout/STC/Calipso'
-
-    dofn = '%s/do-CALIOP-EAD-%d-%02d' %(runDir, year, mon)
-    pathfn = '%s/path-CALIOP-EAD-%d-%02d'  %(runDir, year, mon)
-
-    outpath = '%s/CALIOP-EAD-%s%d' %(outDir, abr, year)
-    srclink = '%s/CALIOP-EAD/part_000-%s%d' %(outDir, abr, year)
     
-    optPath = '%s/CALIOP-EAD-%s%d' %(optDir, abr, year)
+    #: Do file to start tracilla with qsub
+    dofn = '%s/do-CALIOP-EAD-%d-%02d-%s' %(runDir, year, mon, dnf)
+    #: File with paths used by tracilla
+    pathfn = '%s/path-CALIOP-EAD-%d-%02d-%s'  %(runDir, year, mon, dnf)
+
+    #: Result dir
+    outpath = '%s/CALIOP-EAD-%s%d-%s' %(outDir, abr, year, dnf)
+    #: part link from selCaliop. 
+    #: The program will create a link (outlink) to this one in the outpath
+    srclink = '%s/CALIOP-EAD/part_000-%s%d-%s' %(outDir, abr, year, dnf)
+    
+    #: Path for RELEASES and COMMAND files
+    optPath = '%s/CALIOP-EAD-%s%d-%s' %(optDir, abr, year, dnf)
+    #: Yhe RELEASES file. This one is same for everyone
     src_Relise = '%s/RELEASES' %optDir
     
-    trazilla_outfn = '%s/traczilla-CALIOP-EAD-%d-%02d' %(runDir, year, mon)
-    jobbname = '%s/O-${PBS_JOBNAME}' %runDir
+    #: File with the printstatment traxilla is creating during run
+    trazilla_outfn = '%s/traczilla-CALIOP-EAD-%d-%02d-%s' %(runDir, year, mon, dnf)
+    #: Jobanme for qsub
+    jobbname = '%s/O-${PBS_JOBNAME}-%s' %(runDir, dnf)
+    
+    #: If dardar is used as input, add DD to keep seperated
     if useDardar:
         dofn = dofn + '-DD'
         pathfn = pathfn + '-DD'
         jobbname = jobbname + 'DD'
         trazilla_outfn = trazilla_outfn + '-DD'
         srclink = srclink + '-DD'
-        outpath = outpath + '_DD'
-        optPath = optPath + '_DD'
-
+        outpath = outpath + '-DD'
+        optPath = optPath + '-DD'
+        
+    #: Links to files used by tracilla
+    #: startfile i.e. file from selCaliop
     outlink = '%s/part_000' %outpath
+    #: Link to RELEASES file.
     link_Relise = '%s/RELEASES' %optPath
+    #: No link. File with commands for tracilla. Is created here
     commandfn = '%s/COMMAND' %optPath
-    
+    pdb.set_trace()
     print(dofn)
     dof = open(dofn, 'w')
     dof.writelines('#!/bin/bash \n')
