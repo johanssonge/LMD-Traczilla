@@ -77,18 +77,22 @@ if __name__ == '__main__':
     
     #: File with the printstatment traxilla is creating during run
     trazilla_outfn = '%s/traczilla-CALIOP-EAD-%d-%02d-%s' %(runDir, year, mon, dnf)
-    #: Jobanme for qsub
-    jobbname = '%s/O-${PBS_JOBNAME}-%s' %(runDir, dnf)
-    
+    #: Qsub
+    #:Outfile for qsub
+    # qsub_outfile = '%s/O-${PBS_JOBNAME}-%s' %(runDir, dnf)
+    qsub_outfile = '%s/O-%d-%02d-%s' %(runDir, year, mon, dnf)
+    #: Jobname
+    jobname = '%s%d%s' %(abr, year, dnf)
     #: If dardar is used as input, add DD to keep seperated
     if useDardar:
         dofn = dofn + '-DD'
         pathfn = pathfn + '-DD'
-        jobbname = jobbname + 'DD'
+        qsub_outfile = qsub_outfile + 'DD'
         trazilla_outfn = trazilla_outfn + '-DD'
         srclink = srclink + '-DD'
         outpath = outpath + '-DD'
         optPath = optPath + '-DD'
+        jobname = jobname + 'DD'
         
     #: Links to files used by tracilla
     #: startfile i.e. file from selCaliop
@@ -97,14 +101,14 @@ if __name__ == '__main__':
     link_Relise = '%s/RELEASES' %optPath
     #: No link. File with commands for tracilla. Is created here
     commandfn = '%s/COMMAND' %optPath
-    pdb.set_trace()
+
     print(dofn)
     dof = open(dofn, 'w')
     dof.writelines('#!/bin/bash \n')
     dof.writelines('#PBS -q day \n')
     dof.writelines('#PBS -l nodes=1:ppn=16 -l mem=5gb -l vmem=5gb \n')
-    dof.writelines('#PBS -N %s%d \n' %(abr, year))
-    dof.writelines('#PBS -o %s \n' %jobbname)
+    dof.writelines('#PBS -N %s \n' %(jobname))
+    dof.writelines('#PBS -o %s \n' %qsub_outfile)
     dof.writelines('#PBS -j oe \n')
     dof.writelines('\n')
     dof.writelines('module load pgi/2016 \n')
