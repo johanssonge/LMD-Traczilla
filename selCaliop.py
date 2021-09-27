@@ -51,7 +51,7 @@ def readDARDAR(fname, dn):
         tt = Time('1993-01-01 00:00:00',scale='tai') + TimeDelta(tai, format='sec')
         utc = tt.utc.datetime
         #: Cloud Mask
-        clm = ncf.variables['CLOUDSAT_2B_GEOPROF_CPR_Cloud_Mask']
+        clm = ncf.variables['CLOUDSAT_2B_GEOPROF_CPR_Cloud_Mask'][:].data
         
         #: Day/night
         dn_var = ncf.variables['CALIOP_Day_Night_Flag'][:].data
@@ -78,7 +78,8 @@ def readDARDAR(fname, dn):
         # np.datetime64('%s-%s-%s %s' %(sy, sm, sd, st))
         utc = np.datetime64('%s-%s-%s %s' %(sy, sm, sd, st)) + ncf.variables['time'][:].data.astype('timedelta64[s]')
         utc = np.asarray(utc.tolist())
-    
+
+    #: Cut day/nigh/all
     #: 1D
     lats = lats[dnf]
     lons = lons[dnf]
@@ -88,6 +89,7 @@ def readDARDAR(fname, dn):
     temp = temp[dnf, :]
     clm = clm[dnf, :]
 
+    ncf.close()
     return altx, lats, lons, pres, temp, utc, clm
     
     
