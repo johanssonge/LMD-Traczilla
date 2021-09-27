@@ -21,14 +21,17 @@ import sys
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d","--use_dardar",action='store_true',default=False,help="Use DARDAR data")
-    parser.add_argument("-y","--year", type=int, default=2018,  
-                        help="year. Default=2018")
-    parser.add_argument("-m","--month", type=int, default=6, 
-                        help="Month. Default=6")
-    parser.add_argument("-n","--night",type=str, default='a', 
-                        help="pixlar with day (d), night (n) or all (a). Default = a")
-   
+    parser.add_argument("-d", "--use_dardar", action='store_true', default=False, 
+                        help = "Use DARDAR data")
+    parser.add_argument("-y", "--year", type=int, default=2018,  
+                        help = "year. Default=2018")
+    parser.add_argument("-m", "--month", type=int, choices=np.arange(1, 13), default=6, 
+                        help = "Month. Default=6")
+    parser.add_argument("-n", "--night", type=str, choices=["d", "n", "a"], default='a', 
+                        help = "pixlar with day (d), night (n) or all (a). Default = a")
+    parser.add_argument("-q", "--qsub", action='store_true', default = False, 
+                        help = "Send direktly to qsub. Default = False")
+    
     args = parser.parse_args()
     year = args.year
     mon = args.month
@@ -193,7 +196,12 @@ if __name__ == '__main__':
     commandf.writelines("\n")
     commandf.close()
 
+    print(outpath)
     
-    
+    if args.qsub:
+        cmd = "qsub %s" %dofn
+        print("Submitt qsub")
+        print(cmd)
+        c1 = os.system(cmd)
     
     pdb.set_trace()
