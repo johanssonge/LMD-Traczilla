@@ -21,6 +21,8 @@ import sys
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--cont", action='store_true', default = False, 
+                        help = "Continue a run on an already started but broken run. Default = False")
     parser.add_argument("-d", "--use_dardar", action='store_true', default=False, 
                         help = "Use DARDAR data")
     parser.add_argument("-y", "--year", type=int, default=2018,  
@@ -105,55 +107,80 @@ if __name__ == '__main__':
     #: No link. File with commands for tracilla. Is created here
     commandfn = '%s/COMMAND' %optPath
 
-    print(dofn)
-    dof = open(dofn, 'w')
-    dof.writelines('#!/bin/bash \n')
-    dof.writelines('#PBS -q day \n')
-    dof.writelines('#PBS -l nodes=1:ppn=16 -l mem=5gb -l vmem=5gb \n')
-    dof.writelines('#PBS -N %s \n' %(jobname))
-    dof.writelines('#PBS -o %s \n' %qsub_outfile)
-    dof.writelines('#PBS -j oe \n')
-    dof.writelines('\n')
-    dof.writelines('module load pgi/2016 \n')
-    dof.writelines('module load netcdf4/4.3.3.1-pgf2016 \n')
-    dof.writelines('\n')
-    dof.writelines('export OMP_NUM_THREADS=16 \n')
-    dof.writelines('export OMP_SCHEDULE="GUIDED,10000" \n')
-    dof.writelines('/home/legras/flexpart/new6-devel/TRACZILLA-TT-par-ng %s > %s \n' %(pathfn, trazilla_outfn))
-    dof.writelines('\n')
-    dof.close()
-    
-    
-    print(pathfn)
-    pathf = open(pathfn, 'w')
-#     pathf.writelines('/home/ejohansson/Projects/flexpart/traczilla/options/STC/Calipso/CALIOP-EAD-Jul2008/ \n')
-    pathf.writelines('%s/ \n' %optPath)
-    pathf.writelines('%s/ \n' %outpath)
-    pathf.writelines('/data/legras/flexpart_in/ERA5/indexes/ \n')
-    pathf.writelines('/data/legras/flexpart_in/ERA5/indexes/AVAILABLE-%d-uvwt \n' %year)
-    pathf.writelines('/data/legras/flexpart_in/ERA5/indexes/ \n')
-    pathf.writelines('/data/legras/flexpart_in/ERA5/indexes/AVAILABLE-%d-hr \n' %year)
-    pathf.close()
-    
-    if not os.path.isdir(outpath):
-        os.makedirs(outpath)
-    if not os.path.exists(outlink):
-        os.symlink(srclink, outlink)
-    if not os.path.exists(outlink):
-        print('broken link')
-        print('src = %s' %srclink)
-        print('link = %s' %outlink)
-        sys.exit()
+    #: Restartung an old run
+    if args.cont:
+        #: Make sure the old run exist
+        if not os.path.isfile(outpath + '/savpos'):
+            print('No savpos file from tracilla')
+            print('Argument -c --cont cant be used')
+            sys.exit()
+        #: 0 means restart
+        restart = 0
+        #: Move old output file just in case
+        newname = trazilla_outfn
+        i = 0
+        check_exist = True
+        while check_exist:
+            i = i + 1
+            if os.path.isfile(newname):
+                newname = '%s-%d' %(trazilla_outfn, i)
+            else:
+                
+                os.rename(trazilla_outfn, newname)
+                check_exist = False
+    else:
+        #: -1 means new run
+        restart = -1
         
-    if not os.path.isdir(optPath):
-        os.makedirs(optPath)
-    if not os.path.exists(link_Relise):
-        os.symlink(src_Relise, link_Relise)
-    if not os.path.exists(link_Relise):
-        print('broken link')
-        print('src = %s' %src_Relise)
-        print('link = %s' %link_Relise)
-        sys.exit()
+        print(dofn)
+        dof = open(dofn, 'w')
+        dof.writelines('#!/bin/bash \n')
+        dof.writelines('#PBS -q day \n')
+        dof.writelines('#PBS -l nodes=1:ppn=16 -l mem=5gb -l vmem=5gb \n')
+        dof.writelines('#PBS -N %s \n' %(jobname))
+        dof.writelines('#PBS -o %s.out \n' %qsub_outfile)
+        dof.writelines('#PBS -j oe \n')
+        dof.writelines('\n')
+        dof.writelines('module load pgi/2016 \n')
+        dof.writelines('module load netcdf4/4.3.3.1-pgf2016 \n')
+        dof.writelines('\n')
+        dof.writelines('export OMP_NUM_THREADS=16 \n')
+        dof.writelines('export OMP_SCHEDULE="GUIDED,10000" \n')
+        dof.writelines('/home/legras/flexpart/new6-devel/TRACZILLA-TT-par-ng %s > %s \n' %(pathfn, trazilla_outfn))
+        dof.writelines('\n')
+        dof.close()
+        
+        
+        print(pathfn)
+        pathf = open(pathfn, 'w')
+    #     pathf.writelines('/home/ejohansson/Projects/flexpart/traczilla/options/STC/Calipso/CALIOP-EAD-Jul2008/ \n')
+        pathf.writelines('%s/ \n' %optPath)
+        pathf.writelines('%s/ \n' %outpath)
+        pathf.writelines('/data/legras/flexpart_in/ERA5/indexes/ \n')
+        pathf.writelines('/data/legras/flexpart_in/ERA5/indexes/AVAILABLE-%d-uvwt \n' %year)
+        pathf.writelines('/data/legras/flexpart_in/ERA5/indexes/ \n')
+        pathf.writelines('/data/legras/flexpart_in/ERA5/indexes/AVAILABLE-%d-hr \n' %year)
+        pathf.close()
+        
+        if not os.path.isdir(outpath):
+            os.makedirs(outpath)
+        if not os.path.exists(outlink):
+            os.symlink(srclink, outlink)
+        if not os.path.exists(outlink):
+            print('broken link')
+            print('src = %s' %srclink)
+            print('link = %s' %outlink)
+            sys.exit()
+            
+        if not os.path.isdir(optPath):
+            os.makedirs(optPath)
+        if not os.path.exists(link_Relise):
+            os.symlink(src_Relise, link_Relise)
+        if not os.path.exists(link_Relise):
+            print('broken link')
+            print('src = %s' %src_Relise)
+            print('link = %s' %link_Relise)
+            sys.exit()
     
     print(commandfn)
     commandf = open(commandfn, 'w')
@@ -177,7 +204,7 @@ if __name__ == '__main__':
     commandf.writelines(" loffset=0\n")
     commandf.writelines(" loffset2=-0\n")
     commandf.writelines(" restart=.true.\n")
-    commandf.writelines(" hrstart=-1\n")
+    commandf.writelines(" hrstart=%d\n" %restart)
     commandf.writelines(" ldirect=-1\n")
     commandf.writelines(" isentropic_motion=.false.\n")
     commandf.writelines(" z_motion=.false.\n")
