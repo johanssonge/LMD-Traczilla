@@ -13,7 +13,7 @@ from __future__ import absolute_import, division, print_function
 from __future__ import unicode_literals
 import os
 from struct import unpack, pack
-from numpy import asarray,amin,amax
+from numpy import asarray,amin,amax  # @UnresolvedImport
 import gzip
 
 ################################
@@ -143,18 +143,18 @@ def readidx107(fname, quiet=False):
         print(data['numpart'], data['nact'], data['idx_orgn'])
         print(data['nact_lastO'],data['nact_lastNM'],data['nact_lastNH'])
 
-     # case provided to read part_000 of M10
+    # case provided to read part_000 of M10
     if data['nact']==0:
-           print("empty trajectory set")
-           data['flag']=[]
-           data['ir_start']=[]
-           data['x']=[]
-           data['y']=[]
-           data['p']=[]
-           data['t']=[]
-           data['idx_back']=[]
-           fid.close()
-           return data
+        print("empty trajectory set")
+        data['flag']=[]
+        data['ir_start']=[]
+        data['x']=[]
+        data['y']=[]
+        data['p']=[]
+        data['t']=[]
+        data['idx_back']=[]
+        fid.close()
+        return data
     # Get flag
     fid.read(4)  # first fortran record word (normaly 4 characters, char)
     data['flag'] = asarray(unpack('>'+str(data['nact'])+'l', fid.read(data['nact']*4)))
@@ -239,12 +239,12 @@ def writeidx107(fname, data,cmp=False):
         fid = open(fname, 'wb')
 
     if data['lhead'] != 3:
-           print('!!!!!')
-           print('lhead not equal to 3 : change lhead')
-           data['lhead'] = 3
+        print('!!!!!')
+        print('lhead not equal to 3 : change lhead')
+        data['lhead'] = 3
 
     if data['outnfmt'] != 107:
-           raise ValueError('Problem with format')
+        raise ValueError('Problem with format')
 
     # Write lhed, outfmt (format) and mode(=0, index_file; =1, historical file)
     cwd = pack('>l', 3*4)
