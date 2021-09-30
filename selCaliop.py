@@ -335,7 +335,7 @@ if __name__ == '__main__':
             part0['ir_start'] = np.append(part0['ir_start'],ir_start)
             part0['idx_back'] = np.append(part0['idx_back'],np.arange(idx1+1,numpart+1,dtype=int))
             part0['flag'] = np.append(part0['flag'],np.full(npart,127,dtype=int))
-    
+
         date -= timedelta(days=interdate)
         
     # store the dictionary of traces

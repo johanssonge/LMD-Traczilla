@@ -192,7 +192,7 @@ def main():
     ftraj = os.path.join(traj_dir,outnames) 
     #out_file2 = os.path.join(out_dir,'BACK-SVC-EAD-'+date_beg.strftime('%b-%Y-day%d-')+date_end.strftime('%d-D01')+'.hdf5')
     out_file2 = os.path.join(out_dir,outnames+'.h5')
-    pdb.set_trace()
+
     """ Initialization of the calculation """
     # Initialize the dictionary of the parcel dictionaries
     partStep={}
