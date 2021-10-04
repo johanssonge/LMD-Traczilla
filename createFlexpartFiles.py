@@ -112,7 +112,7 @@ if __name__ == '__main__':
         #: Make sure the old run exist
         if not os.path.isfile(outpath + '/savpos'):
             print('No savpos file from tracilla')
-            print('Argument -c --cont cant be used')
+            print('Argument (-c --cont) cant be used')
             sys.exit()
         #: 0 means restart
         restart = 0
@@ -125,7 +125,6 @@ if __name__ == '__main__':
             if os.path.isfile(newname):
                 newname = '%s-%d' %(trazilla_outfn, i)
             else:
-                
                 os.rename(trazilla_outfn, newname)
                 check_exist = False
     else:
