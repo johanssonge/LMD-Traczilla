@@ -36,11 +36,11 @@ import geosat
 from io107 import readpart107, readidx107
 
 p0 = 100000.
-I_DEAD = 0x200000
-I_HIT = 0x400000
-I_CROSSED = 0x2000000
-I_DBORNE =  0x1000000
-I_OLD = 0x800000
+I_DEAD = 0x200000 #: Dead
+I_HIT = 0x400000 #: Hit a cloud
+I_CROSSED = 0x2000000 #: outside domain
+I_DBORNE =  0x1000000 #: Lost after first step
+I_OLD = 0x800000 #: Reached end of time without encounter a cloud
 I_STOP = I_HIT + I_DEAD
 # ACHTUNG I_DBORNE has been set to 0x10000000 (one 0 more) in a number of earlier analysis 
 # prior to 18 March 2018
