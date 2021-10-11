@@ -344,7 +344,7 @@ if __name__ == '__main__':
     
     print('End of generation, particles:',numpart)
     if numpart == 0:
-        print('No points to save (numpart = 0)')
+        print('No points to save ()')
         sys.exit()
     part0['numpart'] = numpart
     part0['nact'] = numpart
