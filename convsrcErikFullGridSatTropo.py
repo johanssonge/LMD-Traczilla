@@ -491,7 +491,7 @@ def get_slice_part(part_a,part_p,live_a,live_p,current_date,dstep,slice_width):
 """ Function managing the exiting parcels """
 
 @jit(nopython=True)
-def exiter(itime, x,y,p,t,idx_back, flag,xc,yc,pc,tc,age, ir_start):#, rr):
+def exiter(itime, x,y,p,t,idx_back, flag,xc,yc,pc,tc,age, ir_start, rr):
     nexits = 0
     for i in range(len(x)):
         i0 = idx_back[i]-IDX_ORGN
