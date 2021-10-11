@@ -33,6 +33,7 @@ from astropy.time import Time, TimeDelta  # @UnresolvedImport
 import argparse
 import io107
 import pdb
+import sys
 
 def readDARDAR(fname, dn):
     # open file
@@ -340,7 +341,11 @@ if __name__ == '__main__':
         
     # store the dictionary of traces
     # final size information
+    
     print('End of generation, particles:',numpart)
+    if numpart == 0:
+        print('No points to save (numpart = 0)')
+        sys.exit()
     part0['numpart'] = numpart
     part0['nact'] = numpart
     params['numpart'] = numpart
