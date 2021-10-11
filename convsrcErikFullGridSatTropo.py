@@ -113,7 +113,7 @@ def main():
     step = 3
     hmax = 1848
     #hmax = 18
-    dstep = timedelta (hours=step)
+    dstep = timedelta(hours=step)
     # time width of the parcel slice
     slice_width = timedelta(minutes=5)
     # number of slices between two outputs
@@ -262,7 +262,8 @@ def main():
         memoryUse = py.memory_info()[0]/2**30
         print('memory use: {:4.2f} gb'.format(memoryUse))
         # Get rid of dictionary no longer used
-        if hour >= 2*step: del partStep[hour-2*step]
+        if hour >= 2*step: 
+            del partStep[hour-2*step]
         # Read the new data
         partStep[hour] = readpart107(hour,ftraj,quiet=True)
         # Link the names
@@ -464,7 +465,7 @@ def get_slice_part(part_a,part_p,live_a,live_p,current_date,dstep,slice_width):
     tp = current_date
     tf = ta
     empty_live = (live_a.sum() == 0)
-    for i in range(nb_slices):
+    for i in range(nb_slices):  # @UnusedVariable
         ti = tf- slice_width
         # note that 0.5*(ti+tf) cannot be calculated as we are adding two dates
         tmid = ti+0.5*(tf-ti)
@@ -473,8 +474,8 @@ def get_slice_part(part_a,part_p,live_a,live_p,current_date,dstep,slice_width):
         dat = {}
         dat['time'] = tmid
         if empty_live:
-           dat['idx_back'] = dat['x'] = dat['y'] = dat['p'] = dat['t'] = []
-           dat['itime']= None
+            dat['idx_back'] = dat['x'] = dat['y'] = dat['p'] = dat['t'] = []
+            dat['itime']= None
         else:
             dat['idx_back'] = part_a['idx_back'][live_a]
             dat['x'] = coefa*part_a['x'][live_a] + coefp*part_p['x'][live_p]
@@ -490,7 +491,7 @@ def get_slice_part(part_a,part_p,live_a,live_p,current_date,dstep,slice_width):
 """ Function managing the exiting parcels """
 
 @jit(nopython=True)
-def exiter(itime, x,y,p,t,idx_back, flag,xc,yc,pc,tc,age, ir_start, rr):
+def exiter(itime, x,y,p,t,idx_back, flag,xc,yc,pc,tc,age, ir_start):#, rr):
     nexits = 0
     for i in range(len(x)):
         i0 = idx_back[i]-IDX_ORGN
@@ -555,8 +556,10 @@ def read_sat(t0,dtRange,pre=False,vshift=0):
             dat0.close()
             # remove dat and make it a view of dat0, try to avoid errors on first attempt
             print('read GridSat for ',current_time)
-            try: del dat
-            except: pass
+            try:
+                del dat
+            except:
+                pass # intended for the first pass when dat undefined
             # Make shift below if needed, presently shift not used 
             # Start shift at 10
             if vshift == 10:
@@ -600,13 +603,22 @@ def read_ERA5(t0,dtRange,pre=False,vshift=0):
             # extraction in a domain that encompasses FullAMA
             datr0 = dats.extract(latRange=[-50,50],varss=['P','T'])
             del dat, dats
-            datr0._CPT()
-            # add a right column to 'pcold'
             print('get ERA5 tropopause for ',current_time)
-            pcold = np.append(datr0.d2d['pcold'].T,[datr0.d2d['pcold'][:,0]],0).T
-            datr0.fP = RegularGridInterpolator((np.arange(-50,51),np.arange(-180,181)),pcold,bounds_error=True)
-            try: del datr
-            except: pass # intended for the first pass when datr undefined
+            usePcold = False
+            if usePcold:
+                print("Use coldpoint tropopause")
+                datr0._CPT()
+                # add a right column to 'pcold'
+                ptropp = np.append(datr0.d2d['pcold'].T,[datr0.d2d['pcold'][:,0]],0).T
+            else:
+                print("Use WMO tropopause")
+                datr0._WMO()
+                ptropp = np.append(datr0.d2d['pwmo'].T,[datr0.d2d['pwmo'][:,0]],0).T
+            datr0.fP = RegularGridInterpolator((np.arange(-50,51), np.arange(-180,181)), ptropp, bounds_error=True)
+            try:
+                del datr
+            except:
+                pass # intended for the first pass when datr undefined
             datr = datr0 # datr as a view of datr0
             # We reproduce here the same sequence as for the satellite file
             # although perhapsnot appropriate (the ERA5 data are instantaneous)             
