@@ -86,10 +86,18 @@ def main():
     #parser.add_argument("-s","--suffix",type=str,help="suffix for special cases")
     parser.add_argument("-q","--quiet",type=str,choices=["y","n"],help="quiet (y) or not (n)")
     #parser.add_argument("-c","--clean0",type=bool,help="clean part_000")
-    parser.add_argument("-t","--step",type=int,help="step in hour between two part files")
+    parser.add_argument("-t","--step", default=3, type=int, 
+                        help="step in hour between two part files. Default = 3")
     #parser.add_argument("-k","--diffus",type=str,choices=['0','01','1','001'],help='diffusivity parameter')
-    parser.add_argument("-v","--vshift",type=int,choices=[0,10],help='vertical shift')
+    parser.add_argument("-v","--vshift",type=int,choices=[0,10], default=0, 
+                        help='vertical shift. Default = 0')
     parser.add_argument("-hm","--hmax",type=int, help='maximum considered integration time')
+    parser.add_argument("-b","--bak", action='store_true', default = False,  
+                        help="Create backup files. Default = False")
+    parser.add_argument("-c","--cont", action='store_true', default = False,  
+                        help = "Continue from backup. Default = False")
+    parser.add_argument("-bs", "--bakstep", type=int, default=40, 
+                        help='backup step (hour) to be multiply with step. Default = 40')
 
     args = parser.parse_args()
     
@@ -110,7 +118,7 @@ def main():
         exit()
 
     """ Parameters """
-    step = 3
+    step = args.step
     hmax = 1848
     #hmax = 18
     dstep = timedelta(hours=step)
@@ -129,8 +137,11 @@ def main():
     suffix =''
     quiet = False
     clean0 = True
+    backup = args.bak
+    backup_step = args.bakstep * step
+    restart = args.cont
     diffus = '0'
-    vshift = 0
+    vshift = args.vshift
     super =''
     dtRange = timedelta(hours=step)
     print('Parsing')
@@ -142,16 +153,14 @@ def main():
     if args.quiet is not None:
         if args.quiet=='y': quiet=True
         else: quiet=False
-    #if args.clean0 is not None: clean0 = args.clean0
-    if args.step is not None: step = args.step
-    #if args.diffus is not None: diffus = args.diffus
-    if diffus == '0': diffus = ''
-    else: diffus = '-D' + diffus
-    if args.vshift is not None: 
-        vshift = args.vshift
-        if vshift > 0:
-            super = '-super'+str(vshift)
 
+    if diffus == '0':
+        diffus = ''
+    else:
+        diffus = '-D' + diffus
+
+    if vshift > 0:
+        super = '-super'+str(vshift)
     # Update the out_dir with the cloud type and the super paramater
     #out_dir = os.path.join(out_dir,'SVC-OUT-GridSat'+super)
     if not os.path.isdir(out_dir):
@@ -192,6 +201,9 @@ def main():
     ftraj = os.path.join(traj_dir,outnames) 
     #out_file2 = os.path.join(out_dir,'BACK-SVC-EAD-'+date_beg.strftime('%b-%Y-day%d-')+date_end.strftime('%d-D01')+'.hdf5')
     out_file2 = os.path.join(out_dir,outnames+'.h5')
+    # backup file
+    bak_file_prod0 = os.path.join(out_dir,outnames + '-K-backup-prod0.h5')
+    bak_file_params = os.path.join(out_dir,outnames +'-K-backup-params.h5')
 
     """ Initialization of the calculation """
     # Initialize the dictionary of the parcel dictionaries
@@ -199,10 +211,6 @@ def main():
     # initialize a grid that will be used to before actually doing any read
     gg = geosat.GeoGrid('GridSat')
 
-    # Build the satellite field generator
-    get_sat = read_sat(sdate,dtRange,pre=True,vshift=vshift)
-    # Build the ECMWF field generator (both available at the same dtRange interval)
-    get_ERA5 = read_ERA5(sdate,dtRange,pre=True)
     
     # Read the index file that contains the initial positions
     part0 = readidx107(os.path.join(ftraj,'part_000'),quiet=False)
@@ -233,13 +241,6 @@ def main():
     prod0['rvs'] = np.full(part0['numpart'],0.01,dtype='float')
     # truncate eventually to 32 bits at the output stage
 
-    # read (again) the part_000 file as a vieaw
-    partStep[0] = part0
-    # cleaning is necessary for runs starting in the fake restart mode
-    # otherwise all parcels are thought to exit at the first step
-    if clean0:
-        partStep[0]['idx_back']=[]
-
     # number of hists and exits
     nhits = 0
     nexits = 0
@@ -250,10 +251,46 @@ def main():
     # initialize datsat to None to force first read
     datsat = None
 
-    # used to get non borne parcels
-    new = np.full(part0['numpart'],False,dtype='bool')
-
+    
     print('Initialization completed')
+    
+    # start_from_begin = True
+    if restart:
+        print('restart run')
+        try:
+            params = fk.load(bak_file_params)
+            prod0 = fk.load(bak_file_prod0)
+            # start_from_begin = False
+        except:
+            print('cannot load backup')
+            return -1
+        
+    # if start_from_begin:
+        
+        [offset, nhits, nexits, nold, ndborne, nnew, new, current_date] = params['params']
+        partStep[offset] = readpart107(offset,ftraj,quiet=True)
+        partStep[offset]['x'][partStep[offset]['x']>180] -= 360
+        # Initialize sat and ERA5 yield one step ahead as a precaution
+        get_sat = read_sat(current_date + dstep,dtRange,pre=True,vshift=vshift)
+        get_ERA5 = read_ERA5(current_date + dstep,dtRange,pre=True)
+    else:
+        # read the part_000 file
+        partStep[0] = part0
+        # partStep[0] = readpart107(0,ftraj,quiet=False)
+        # cleaning is necessary for runs starting in the fake restart mode
+        # otherwise all parcels are thought to exit at the first step
+        if clean0:
+            partStep[0]['idx_back']=[]
+        # parcels with longitude east of zero degree are set to negative values
+        partStep[0]['x'][partStep[0]['x']>180] -= 360
+        # used to get non borne parcels
+        new = np.full(part0['numpart'],False,dtype='bool')
+        # Build the satellite field generator
+        get_sat = read_sat(sdate,dtRange,pre=True,vshift=vshift)
+        # Build the ECMWF field generator (both available at the same dtRange interval)
+        get_ERA5 = read_ERA5(sdate,dtRange,pre=True)
+        
+        
 
     """ Main loop on the output time steps """
     for hour in range(step,hmax+1,step):
@@ -397,8 +434,7 @@ def main():
                     datsat.geogrid.box_range[0,0],datsat.geogrid.box_range[1,0],datsat.geogrid.stepx,\
                     datsat.geogrid.stepy,datsat.geogrid.box_binx,datsat.geogrid.box_biny)
 
-            sys.stdout.flush()
-
+        
         """ End of of loop on slices """
         
         """ INSERT HERE CODE FOR PARCELS ENDING BY AGE -> TO BE CHECKED 
@@ -407,7 +443,7 @@ def main():
          from the output before being processed here and is wrongly processed
          as crossed."""
         # Check the age limit (easier to do it here)
-        if len(partante['idx_back']) >0:
+        if len(partante['idx_back']) > 0:
             print("Manage age limit",flush=True)
             age_sec = part0['ir_start'][partante['idx_back']-IDX_ORGN]-partante['itime']
             IIold_o = age_sec > (age_bound-(step/24)) * 86400
@@ -435,6 +471,13 @@ def main():
         if part0['numpart'] != nexits + nhits + nlive + ndborne:
             print('@@@ ACHTUNG numpart not equal to sum ',part0['numpart'],nexits+nhits+nlive+ndborne)
 
+        sys.stdout.flush()
+        
+        if backup & (hour % backup_step == 0):
+            print("Save backup")
+            print(bak_file_prod0)
+            fk.save(bak_file_prod0, prod0)
+            fk.save(bak_file_params,{'params': [hour, nhits, nexits, nold, ndborne, nnew, new, current_date]})
     """ End of the procedure and storage of the result """
     #output file
     fk.save(out_file2,prod0,compression='zlib')
