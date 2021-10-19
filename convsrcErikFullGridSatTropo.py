@@ -182,7 +182,11 @@ def main():
         # Output file      
         #print_file = os.path.join(out_dir,'out','BACK-SVC-EAD-'+date_beg.strftime('%b-%Y-day%d-')+date_end.strftime('%d-D01')+'.out')
         print_file = os.path.join(out_dir,'out',outnames+'.out')
-        fsock = open(print_file,'w')
+        if restart:
+            fsock = open(print_file,'a')
+        else:
+            fsock = open(print_file,'w')
+            
         sys.stdout=fsock
 
     # initial time to read the sat files
@@ -240,13 +244,13 @@ def main():
     # Set rvs at arbitrary large value
     prod0['rvs'] = np.full(part0['numpart'],0.01,dtype='float')
     # truncate eventually to 32 bits at the output stage
-
     # number of hists and exits
     nhits = 0
     nexits = 0
     ndborne = 0
     nnew = 0
     nold = 0
+    offset = 0
     
     # initialize datsat to None to force first read
     datsat = None
@@ -254,7 +258,15 @@ def main():
     
     print('Initialization completed')
     
-    # start_from_begin = True
+    #: Make sure that there are backupfiles
+    if restart:
+        if (not os.path.isfile(bak_file_params)):
+            print('No params file. Lets start from the begining')
+            restart = False
+        if (not os.path.isfile(bak_file_prod0)):
+            print('No backup file. Lets start from the begining')
+            restart = False
+            
     if restart:
         print('restart run')
         try:
@@ -265,7 +277,6 @@ def main():
             print('cannot load backup')
             return -1
         
-    # if start_from_begin:
         
         [offset, nhits, nexits, nold, ndborne, nnew, new, current_date] = params['params']
         partStep[offset] = readpart107(offset,ftraj,quiet=True)
@@ -290,22 +301,31 @@ def main():
         # Build the ECMWF field generator (both available at the same dtRange interval)
         get_ERA5 = read_ERA5(sdate,dtRange,pre=True)
         
-        
 
     """ Main loop on the output time steps """
-    for hour in range(step,hmax+1,step):
+    for hour in range(step + offset, hmax + 1, step):
         pid = os.getpid()
         py = psutil.Process(pid)
         memoryUse = py.memory_info()[0]/2**30
         print('memory use: {:4.2f} gb'.format(memoryUse))
         # Get rid of dictionary no longer used
         if hour >= 2*step: 
-            del partStep[hour-2*step]
+            try:
+                del partStep[hour-2*step]
+            except:
+                print('nothing to delete')
         # Read the new data
         partStep[hour] = readpart107(hour,ftraj,quiet=True)
         # Link the names
         partante = partStep[hour-step]
         partpost = partStep[hour]
+        # parcels with longitude east of zero degree are set to negative values
+        # done with try to prevent errors when the file is empty
+        try:
+            partpost['x'][partpost['x']>180] -= 360
+            #print("partpost x ",partpost['x'].min(),partpost['x'].max())
+        except: pass
+        
         if partpost['nact']>0:
             print('hour ',hour,'  numact ', partpost['nact'], '  max p ',partpost['p'].max())
         else:
@@ -352,6 +372,7 @@ def main():
             prod0['src']['age'][~new] = 0
             print('number of dead borne',ndborne,part0['numpart']-nnew)
             del new
+            new = None #: Needs to save something in Backupfiles
 
         """ PROCESSING OF CROSSED PARCELS """
         if len(kept_a)>0:
@@ -465,19 +486,20 @@ def main():
             n_nohit = ((prod0['flag_source'][partpost['idx_back']-IDX_ORGN] & I_HIT) == 0).sum()
         except:
             nlive = 0
-            n_nohit =0
+            n_nohit = 0
         print('end hour ',hour,'  numact', partpost['nact'], ' nexits',nexits,' nhits',nhits, ' nlive',nlive,' nohit',n_nohit)
         # check that nlive + nhits + nexits = numpart, should be true after the first day
         if part0['numpart'] != nexits + nhits + nlive + ndborne:
             print('@@@ ACHTUNG numpart not equal to sum ',part0['numpart'],nexits+nhits+nlive+ndborne)
 
         sys.stdout.flush()
-        
+            
         if backup & (hour % backup_step == 0):
             print("Save backup")
             print(bak_file_prod0)
             fk.save(bak_file_prod0, prod0)
             fk.save(bak_file_params,{'params': [hour, nhits, nexits, nold, ndborne, nnew, new, current_date]})
+
     """ End of the procedure and storage of the result """
     #output file
     fk.save(out_file2,prod0,compression='zlib')
