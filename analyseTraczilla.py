@@ -24,6 +24,8 @@ import time
 import os
 import sys
 import datetime
+import pickle
+import gzip
 
 sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
 from io107 import readpart107, readidx107
@@ -41,8 +43,15 @@ I_STOP = I_HIT + I_DEAD
 
 #:----------------------------------------------------
 
-
-
+def readCatalogFile(fn):
+    objects = []
+    with (gzip.open(fn, "rb")) as openfile:
+        while True:
+            try:
+                objects.append(pickle.load(openfile))
+            except EOFError:
+                break
+    return objects[0]
 
 def readConvFile(fn, usefk=False):
     """ 
@@ -121,12 +130,14 @@ if __name__ == '__main__':
             #SVC_Dir = '/bdd/CFMIP/SEL2'
     datPath = os.environ['HOME'].replace('/home/', '/data/')
     scrPath = os.environ['HOME'].replace('/home/', '/scratchu/')
-    trajDir = '%s/flexout/STC/Calipso' %datPath
+    mainDir = '%s/flexout/STC/Calipso' %datPath
+    # trajDir = '%s/flexout/STC/Calipso' %datPath
     outDir = '%s/flexout/STC/Calipso-OUT' %datPath
     plotDir = '%s/LMD-Traczilla/Plots' %scrPath
     
-    paramDir = '%s/CALIOP-EAD/Param' %trajDir
-    compare = True
+    paramDir = '%s/CALIOP-EAD/Param' %mainDir
+    catalogDir = '%s/CALIOP-EAD/Catalog' %mainDir
+    compare = False
     # outDir = '/data/ejohansson/flexout/STC/Calipso-OUT/Coldpoint'
     #: filename of outfiles
     # outnames = 'CALIOP-'+advect+'-'+date_end.strftime('%b%Y')+diffus+'-%s' %args.night 
@@ -135,13 +146,21 @@ if __name__ == '__main__':
     
     #: Directories of the backward trajectories and name of the output file
     outname = 'CALIOP-EAD-May2019-n-DD'
-    ftraj = os.path.join(trajDir,outname) 
-    #out_file2 = os.path.join(out_dir,'BACK-SVC-EAD-'+date_beg.strftime('%b-%Y-day%d-')+date_end.strftime('%d-D01')+'.hdf5')
+    
+    paramname = 'selDardar_Params-%s.pkl' %'-'.join(outname.split('-')[2:4])
+    catalogname = paramname.replace('_Params-', '_Calalog-')
+    paramFile = os.path.join(paramDir, paramname)
+    catalFile = os.path.join(catalogDir, catalogname)
+    
+    catalog = readCatalogFile(catalFile)
+    trajDir = os.path.join(mainDir,outname) 
     fname = os.path.join(outDir, outname + '.h5')
 
-    # Read the index file that contains the initial positions
-    # part0 = readidx107(os.path.join(ftraj,'part_000'),quiet=False)
+    #: Read the index file that contains the initial positions
+    part0 = readidx107(os.path.join(trajDir,'part_000'),quiet=False)
     # print('numpart',part0['numpart'])
+    #:
+    
     
     rvs, fls, age, lons, lats, temp, pres = readConvFile(fname)
     
@@ -151,6 +170,7 @@ if __name__ == '__main__':
     
     lons = checkLons(lons, hits)
     # originDate, idxDates = getDates(part0, hits)
+    pdb.set_trace()
     
     if compare:
         outDirCP = '%s/flexout/STC/Calipso-OUT/Coldpoint' %datPath
