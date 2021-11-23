@@ -42,6 +42,8 @@ I_STOP = I_HIT + I_DEAD
 #:----------------------------------------------------
 
 
+
+
 def readConvFile(fn, usefk=False):
     """ 
     Read the resultfile from convsrcErikFullGridSatTropo
@@ -120,10 +122,11 @@ if __name__ == '__main__':
     datPath = os.environ['HOME'].replace('/home/', '/data/')
     scrPath = os.environ['HOME'].replace('/home/', '/scratchu/')
     trajDir = '%s/flexout/STC/Calipso' %datPath
-    outDir = '%s/flexout/STC/Calipso-OUT/Coldpoint' %datPath
-    outDir2 = '%s/flexout/STC/Calipso-OUT/Org' %datPath
-    outDir3 = '%s/flexout/STC/Calipso-OUT' %datPath
+    outDir = '%s/flexout/STC/Calipso-OUT' %datPath
     plotDir = '%s/LMD-Traczilla/Plots' %scrPath
+    
+    paramDir = '%s/CALIOP-EAD/Param' %trajDir
+    compare = True
     # outDir = '/data/ejohansson/flexout/STC/Calipso-OUT/Coldpoint'
     #: filename of outfiles
     # outnames = 'CALIOP-'+advect+'-'+date_end.strftime('%b%Y')+diffus+'-%s' %args.night 
@@ -131,89 +134,138 @@ if __name__ == '__main__':
     #     outnames = outnames + '-DD'
     
     #: Directories of the backward trajectories and name of the output file
-    outname = 'CALIOP-EAD-May2019-n'
-    doutname = outname + '-DD'
+    outname = 'CALIOP-EAD-May2019-n-DD'
     ftraj = os.path.join(trajDir,outname) 
     #out_file2 = os.path.join(out_dir,'BACK-SVC-EAD-'+date_beg.strftime('%b-%Y-day%d-')+date_end.strftime('%d-D01')+'.hdf5')
     fname = os.path.join(outDir, outname + '.h5')
-    fname2 = os.path.join(outDir2, outname + '.h5')
-    fname3 = os.path.join(outDir3, outname + '.h5')
-    dfname = os.path.join(outDir, doutname + '.h5')
 
     # Read the index file that contains the initial positions
     # part0 = readidx107(os.path.join(ftraj,'part_000'),quiet=False)
     # print('numpart',part0['numpart'])
     
     rvs, fls, age, lons, lats, temp, pres = readConvFile(fname)
-    rvs2, fls2, age2, lons2, lats2, temp2, pres2 = readConvFile(fname2)
-    rvs3, fls3, age3, lons3, lats3, temp3, pres3 = readConvFile(fname3)
-    drvs, dfls, dage, dlons, dlats, dtemp, dpres = readConvFile(dfname)
     
     # print(time.time() - tic)
     old = (fls & I_OLD) == I_OLD
     hits = (fls & I_HIT) == I_HIT
-    hits2 = (fls2 & I_HIT) == I_HIT
-    hits3 = (fls3 & I_HIT) == I_HIT
-    dhits = (dfls & I_HIT) == I_HIT
     
     lons = checkLons(lons, hits)
-    lons2 = checkLons(lons2, hits2)
-    lons3 = checkLons(lons3, hits3)
-    dlons = checkLons(dlons, dhits)
     # originDate, idxDates = getDates(part0, hits)
     
-    fig = plt.figure()
-    fig.suptitle('Comparing age histograms')
-    ax = fig.add_subplot(2,2,1)
-    ax.hist(age[hits] // 86400, bins=100)
-    ax.set_ylim(0, 190000)
-    ax.set_xlabel('Age [days]')
-    # ax.set_ylabel('Number')
-    ax.set_title('Coldpoint - Calipso')
-    ax.text(0.7, 0.9,'total = %d' %hits.sum(),
-            horizontalalignment='center',
-            verticalalignment='center',
-            transform = ax.transAxes)
+    if compare:
+        outDirCP = '%s/flexout/STC/Calipso-OUT/Coldpoint' %datPath
+        outDirOrg = '%s/flexout/STC/Calipso-OUT/Org' %datPath
+        coutname = outname.replace('-DD', '')
+        fname2 = os.path.join(outDir, coutname + '.h5')
+        fname3 = os.path.join(outDirCP, coutname + '.h5')
+        fname4 = os.path.join(outDirOrg, coutname + '.h5')
+        rvs2, fls2, age2, lons2, lats2, temp2, pres2 = readConvFile(fname2)
+        rvs3, fls3, age3, lons3, lats3, temp3, pres3 = readConvFile(fname3)
+        rvs4, fls4, age4, lons4, lats4, temp4, pres4 = readConvFile(fname4)
+        hits2 = (fls2 & I_HIT) == I_HIT
+        hits3 = (fls3 & I_HIT) == I_HIT
+        hits4 = (fls4 & I_HIT) == I_HIT
+        lons2 = checkLons(lons2, hits2)
+        lons3 = checkLons(lons3, hits3)
+        lons4 = checkLons(lons4, hits4)
     
-    ax = fig.add_subplot(2,2,2)
-    ax.hist(age2[hits2] // 86400, bins=100)
-    ax.set_ylim(0, 190000)
-    ax.set_xlabel('Age [days]')
-    ax.set_yticks([])
-    # ax.set_ylabel('Number')
-    ax.set_title('WMO - Calipso')
-    ax.text(0.7, 0.9,'total = %d' %hits2.sum(),
-            horizontalalignment='center',
-            verticalalignment='center',
-            transform = ax.transAxes)
-    # ax.plot(age[hits], pres[hits])
-
-    ax = fig.add_subplot(2,2,3)
-    ax.hist(age3[hits3] // 86400, bins=100)
-    ax.set_ylim(0, 300000)
-    ax.set_xlabel('Age [days]')
-    # ax.set_ylabel('Number')
-    ax.set_title('Coldpoint - Calipso - vshift 10')
-    ax.text(0.7, 0.9,'total = %d' %hits3.sum(),
-            horizontalalignment='center',
-            verticalalignment='center',
-            transform = ax.transAxes)
+    #: --- Plot ---
     
-    ax = fig.add_subplot(2,2,4)
-    ax.hist(dage[dhits] // 86400, bins=100)
-    ax.set_ylim(0, 600000)
-    ax.set_xlabel('Age [days]')
-    # ax.set_ylabel('Number')
-    ax.set_title('Coldpoint - Dardar')
-    ax.text(0.7, 0.9,'total = %d' %dhits.sum(),
-            horizontalalignment='center',
-            verticalalignment='center',
-            transform = ax.transAxes)
+    if compare:
+        fig = plt.figure()
+        fig.suptitle('2D histograms')
+        ax = fig.add_subplot(2,2,1)
+        ax.hist2d(age[hits] / 86400, pres[hits], bins=400)#, density=True)
+        ax.invert_yaxis()
+        ax.set_xlabel('Age [days]')
+        ax.set_ylabel('Pressure')
+        ax.set_title('WMO - Dardar - vshift 10')
+        
+        ax = fig.add_subplot(2,2,2)
+        ax.hist2d(age2[hits2] / 86400, pres2[hits2], bins=400)#, density=True)
+        ax.invert_yaxis()
+        ax.set_xlabel('Age [days]')
+        ax.set_ylabel('Pressure')
+        ax.set_title('WMO - Calipso - vshift 10')
     
-    plt.tight_layout()
-    figname = '%s/comp_hist_age' %plotDir
-    fig.savefig(figname + '.png')
-
+        ax = fig.add_subplot(2,2,3)
+        ax.hist2d(age3[hits3] / 86400, pres3[hits3], bins=400)#, density=True)
+        ax.invert_yaxis()
+        ax.set_xlabel('Age [days]')
+        ax.set_ylabel('Pressure')
+        ax.set_title('Coldpoint - Calipso')
+        
+        ax = fig.add_subplot(2,2,4)
+        ax.hist2d(age4[hits4] / 86400, pres4[hits4], bins=400)#, density=True)
+        ax.invert_yaxis()
+        ax.set_xlabel('Age [days]')
+        ax.set_ylabel('Pressure')
+        ax.set_title('WMO - Calipso')
+        
+        plt.tight_layout()
+        figname = '%s/comp_2dhist_age_pres' %plotDir
+        fig.savefig(figname + '.png')
+    
+        fig = plt.figure()
+        fig.suptitle('Comparing age histograms')
+        ax = fig.add_subplot(2,2,1)
+        ax.hist(age[hits] / 86400, bins=200, density=True)
+        # ax.set_ylim(0, 190000)
+        ax.set_xlabel('Age [days]')
+        # ax.set_ylabel('Number')
+        ax.set_title('WMO - Dardar - vshift 10')
+        ax.text(0.7, 0.9,'total = %d' %hits.sum(),
+                horizontalalignment='center',
+                verticalalignment='center',
+                transform = ax.transAxes)
+        
+        ax = fig.add_subplot(2,2,2)
+        ax.hist(age2[hits2] / 86400, bins=200, density=True)
+        # ax.set_ylim(0, 190000)
+        ax.set_xlabel('Age [days]')
+        # ax.set_yticks([])
+        # ax.set_ylabel('Number')
+        ax.set_title('WMO - Calipso - vshift 10')
+        ax.text(0.7, 0.9,'total = %d' %hits2.sum(),
+                horizontalalignment='center',
+                verticalalignment='center',
+                transform = ax.transAxes)
+        # ax.plot(age[hits], pres[hits])
+    
+        ax = fig.add_subplot(2,2,3)
+        ax.hist(age3[hits3] / 86400, bins=200, density=True)
+        # ax.set_ylim(0, 300000)
+        ax.set_xlabel('Age [days]')
+        # ax.set_ylabel('Number')
+        ax.set_title('Coldpoint - Calipso')
+        ax.text(0.7, 0.9,'total = %d' %hits3.sum(),
+                horizontalalignment='center',
+                verticalalignment='center',
+                transform = ax.transAxes)
+        
+        ax = fig.add_subplot(2,2,4)
+        # ax.hist(dage[dhits] // 86400, bins=100)
+        ax.hist(age4[hits4] / 86400, bins=200, density=True)
+        # ax.set_ylim(0, 600000)
+        ax.set_xlabel('Age [days]')
+        # ax.set_ylabel('Number')
+        ax.set_title('WMO - Calipso')
+        ax.text(0.7, 0.9,'total = %d' %hits4.sum(),
+                horizontalalignment='center',
+                verticalalignment='center',
+                transform = ax.transAxes)
+        
+        plt.tight_layout()
+        figname = '%s/comp_hist_age' %plotDir
+        fig.savefig(figname + '.png')
+    
+    
+    
+    
+    
+    
+    
+    
     # fig = plt.figure()
     # ax = fig.add_subplot(1,1,1, projection=ccrs.PlateCarree())
     # rotated_pole = ccrs.RotatedPole(pole_longitude=177.5, pole_latitude=37.5)
