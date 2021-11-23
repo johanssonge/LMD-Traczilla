@@ -51,8 +51,24 @@ def readDARDAR(fname, dn):
         tai = ncf.variables['CLOUDSAT_TAI_Time'][:].data
         tt = Time('1993-01-01 00:00:00',scale='tai') + TimeDelta(tai, format='sec')
         utc = tt.utc.datetime
+
+        #: Extras
         #: Cloud Mask
         clm = ncf.variables['CLOUDSAT_2B_GEOPROF_CPR_Cloud_Mask'][:].data
+        clv = ncf.variables['CALIOP_Land_Water_Mask'][:].data
+        cst = ncf.variables['CALIOP_IGBP_Surface_Type'][:].data
+        th = ncf.variables['Tropopause_Height'][:].data
+        sp = ncf.variables['Surface_pressure'][:].data
+        skt = ncf.variables['Skin_temperature'][:].data
+        t2 = ncf.variables['Temperature_2m'][:].data
+        sst = ncf.variables['Sea_surface_temperature'][:].data
+        sh = ncf.variables['Specific_humidity'][:].data
+        msz = ncf.variables['MODIS_Solar_zenith'][:].data
+        dsc = ncf.variables['DARMASK_Simplified_Categorization'][:].data
+        
+        extras = {'Cloud_Mask': clm, 'Land_Water_Mask': clv, 'Surface_Type': cst, \
+                  'Tropopause_Height': th, 'Surface_pressure': sp, 'Skin_temperature': skt, \
+                  'Temperature_2m': t2, 'SST': sst, 'Specific_humidity': sh, 'SZA': msz, 'Simplified_Categorization': dsc}
         
         #: Day/night
         dn_var = ncf.variables['CALIOP_Day_Night_Flag'][:].data
@@ -88,10 +104,21 @@ def readDARDAR(fname, dn):
     #: 2D
     pres = pres[dnf, :]
     temp = temp[dnf, :]
-    clm = clm[dnf, :]
+    
+    #: Extras
+    for arname, val in extras.items():
+        if val.ndim == 1:
+            val = val[dnf]
+        elif val.ndim == 2:
+            val = val[dnf, :]
+        else:
+            print('Wrong ndim')
+            sys.exit()
+        extras[arname] = val
+
 
     ncf.close()
-    return altx, lats, lons, pres, temp, utc, clm
+    return altx, lats, lons, pres, temp, utc, extras
     
     
             
@@ -195,7 +222,10 @@ if __name__ == '__main__':
     #: Use every second datapoint. 
     #: This mean 10km Horizontal spacing in 5 km units
     #: and 2km Horizontal spacing in 1 km units
-    ns = 2    
+    if useDardar:
+        ns = 10
+    else:
+        ns = 2    
     
     catalogdir = './Catalog'
     if not os.path.isdir(catalogdir):
@@ -266,7 +296,7 @@ if __name__ == '__main__':
         for filename in fic:
             #print(file)
             if useDardar:
-                altx, lats, lons, pres, temp, utc, clm = readDARDAR(filename, dn)
+                altx, lats, lons, pres, temp, utc, extras = readDARDAR(filename, dn)
             else:
                 # skip day/night files
                 if (dn == 'n') and ('ZD' in filename):
@@ -309,9 +339,22 @@ if __name__ == '__main__':
             lons = np.repeat(lons,nlev)
             # Unidimensionalize the 2D fields
             npart = nlev * len(sel)
-            pres = np.reshape(pres,npart)
-            temp = np.reshape(temp,npart)
-    
+            pres = np.reshape(pres, npart)
+            temp = np.reshape(temp, npart)
+            #: Extras
+            for arname, val in extras.items():
+                if val.ndim == 1:
+                    #: Selection of the 1D data
+                    val = val[sel]
+                    #: Expand the 1D fields
+                    val = np.repeat(val, nlev)
+                elif val.ndim == 2:
+                    #: Selection of the 2D data
+                    val = val[sel,:][:,altidx]
+                    #: Unidimensionalize the 2D fields
+                    val = np.reshape(val, npart)
+                extras[arname] = val
+            
             # Enrich the catalog
             fname = os.path.basename(filename)
             # extract orbit
@@ -322,9 +365,11 @@ if __name__ == '__main__':
                 #: Really date and time
                 orbit = fname[35:-4]
                 
-            catalog[date][orbit] = {'type':dntype,'longitudes':[lons[0],lons[-1]],
+            catalog[date][orbit] = {'longitudes':[lons[0],lons[-1]],
                                     'utc':[utc[0],utc[-1]],'selection':sel,'lensel':len(sel),
-                                    'npart':npart}
+                                    'npart':npart, 
+                                    'Cloud_Mask': extras['Cloud_Mask'], 'Tropopause_Height': extras['Tropopause_Height'], 
+                                    'SZA': extras['SZA'], 'Simplified_Categorization': extras['Simplified_Categorization']}
             print(date,orbit,len(sel),npart)
             # fill part0
             idx1 = numpart
