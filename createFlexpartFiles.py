@@ -54,7 +54,7 @@ if __name__ == '__main__':
         year_m2 = year - 1
         if mon == 1:
             mon_m2 = 11
-        elif min == 2:
+        elif mon == 2:
             mon_m2 = 12
     else:
         year_m2 = year
@@ -75,11 +75,10 @@ if __name__ == '__main__':
     outpath = '%s/CALIOP-EAD-%s%d-%s' %(outDir, abr, year, dnf)
     #: part link from selCaliop. 
     #: The program will create a link (outlink) to this one in the outpath
-    srclink = '%s/CALIOP-EAD/part_000-%s%d-%s' %(outDir, abr, year, dnf)
-    
+    srclink = '%s/CALIOP-EAD/Part/part_000-%s%d-%s' %(outDir, abr, year, dnf)
     #: Path for RELEASES and COMMAND files
     optPath = '%s/CALIOP-EAD-%s%d-%s' %(optDir, abr, year, dnf)
-    #: Yhe RELEASES file. This one is same for everyone
+    #: The RELEASES file. This one is same for everyone
     src_Relise = '%s/RELEASES' %optDir
     
     #: File with the printstatment traxilla is creating during run
@@ -158,16 +157,20 @@ if __name__ == '__main__':
         pathf.writelines('%s/ \n' %optPath)
         pathf.writelines('%s/ \n' %outpath)
         pathf.writelines('/data/legras/flexpart_in/ERA5/indexes/ \n')
-        pathf.writelines('/data/legras/flexpart_in/ERA5/indexes/AVAILABLE-%d-uvwt \n' %year)
+        # pathf.writelines('/data/legras/flexpart_in/ERA5/indexes/AVAILABLE-%d-uvwt \n' %year)
+        pathf.writelines('/data/ejohansson/ERA5/indexes/AVAILABLE-%d-uvwt \n' %year)
         pathf.writelines('/data/legras/flexpart_in/ERA5/indexes/ \n')
-        pathf.writelines('/data/legras/flexpart_in/ERA5/indexes/AVAILABLE-%d-hr \n' %year)
+        # pathf.writelines('/data/legras/flexpart_in/ERA5/indexes/AVAILABLE-%d-hr \n' %year)
+        pathf.writelines('/data/ejohansson/ERA5/indexes/AVAILABLE-%d-hr \n' %year)
         pathf.close()
         
         if not os.path.isdir(outpath):
             os.makedirs(outpath)
-        if not os.path.exists(outlink):
+        if not os.path.islink(outlink):
+            #: Only controls if link exist not if broken
             os.symlink(srclink, outlink)
         if not os.path.exists(outlink):
+            #: Both controls if link exist and if broken
             print('broken link')
             print('src = %s' %srclink)
             print('link = %s' %outlink)
@@ -175,14 +178,14 @@ if __name__ == '__main__':
             
         if not os.path.isdir(optPath):
             os.makedirs(optPath)
-        if not os.path.exists(link_Relise):
+        if not os.path.islink(link_Relise):
             os.symlink(src_Relise, link_Relise)
         if not os.path.exists(link_Relise):
             print('broken link')
             print('src = %s' %src_Relise)
             print('link = %s' %link_Relise)
             sys.exit()
-    
+
     print(commandfn)
     commandf = open(commandfn, 'w')
     commandf.writelines("# COMMAND\n")
