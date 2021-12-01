@@ -10,7 +10,7 @@ Created on Thu May 21 23:02:19 2020
 """
 import argparse
 from datetime import datetime, timedelta
-from dateutil.relativedelta import relativedelta
+from dateutil.relativedelta import relativedelta  # @UnresolvedImport
 import numpy as np
 import pdb
 
@@ -43,7 +43,9 @@ if extended:
 else:
     date_start = date
     saveDir = './'
-fid = open('%s/AVAILABLE-%s-%s' %(saveDir, str(year), typ), 'w')
+
+filename = '%s/AVAILABLE-%s-%s' %(saveDir, str(year), typ)
+fid = open(filename, 'w')
 
 if typ == 'uvwt':
     # Heading
@@ -78,6 +80,6 @@ elif typ == 'hr':
             time = (time +1200) %2400
     fid.close()
         
-
+print(filename)
 
 
