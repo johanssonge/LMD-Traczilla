@@ -246,9 +246,9 @@ if __name__ == '__main__':
     params = {'enddate':endDate,'originDate':originDate,'latmin':latmin,'latmax':latmax,
               'ns':ns,
               'altx':altx_ref,'type': dntype,'interdate':interdate}
-    catalog_file = '%s/selCaliop_Calalog-%s-%s.pkl' %(catalogdir, endDate.strftime('%b%Y'), dn)
-    params_file =  '%s/selCaliop_Params-%s-%s.pkl' %(paramdir, endDate.strftime('%b%Y'), dn)
-    part0_file = '%s/part_000-%s-%s' %(partdir, endDate.strftime('%b%Y'), dn)
+    catalog_file = '%s/selCaliop_Calalog-%s-%s.pkl' %(catalogdir, endDate.strftime('%Y%m'), dn)
+    params_file =  '%s/selCaliop_Params-%s-%s.pkl' %(paramdir, endDate.strftime('%Y%m'), dn)
+    part0_file = '%s/part_000-%s-%s' %(partdir, endDate.strftime('%Y%m'), dn)
     if useDardar:
         catalog_file = catalog_file.replace('/selCaliop_', '/selDardar_')
         params_file = params_file.replace('/selCaliop_', '/selDardar_')
