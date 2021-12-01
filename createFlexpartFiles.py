@@ -15,10 +15,10 @@ Copyright (c) 2021 Erik Johansson
 
 import numpy as np  # @UnusedImport
 import pdb
-import calendar
 import os
 import sys
-
+import datetime
+from dateutil.relativedelta import relativedelta  # @UnresolvedImport
 
 if __name__ == '__main__':
     import argparse
@@ -43,66 +43,69 @@ if __name__ == '__main__':
     #: Day / night / 24h
     dnf = args.night
     
-    if mon == 12:
-        year_p1 = year + 1
-        mon_p1 = 1
-    else:
-        year_p1 = year
-        mon_p1 = mon + 1
+    startDate = datetime.datetime(year, mon, 1, 0, 0) + relativedelta(months=1)
+    endDate = startDate - relativedelta(days=75)
 
-    if mon in [1,2]:
-        year_m2 = year - 1
-        if mon == 1:
-            mon_m2 = 11
-        elif mon == 2:
-            mon_m2 = 12
-    else:
-        year_m2 = year
-        mon_m2 = mon - 2
-
-    abr = calendar.month_abbr[mon]
+    # year_p1 = startDate.year
+    # mon_p1 = startDate.month
+    # year_m2 = endDate.year
+    # mon_m2 = endDate.month
     
-    runDir = '/home/ejohansson/Projects/flexpart/work/STC/Calipso'
+    #: Dirs
+    runDir = '/home/ejohansson/Projects/flexpart/work/STC/Calipso/%d' %year
     optDir = '/home/ejohansson/Projects/flexpart/traczilla/options/STC/Calipso'
-    outDir = '/data/ejohansson/flexout/STC/Calipso'
+    dataDir = '/data/ejohansson/flexout/STC/Calipso'
+    if not os.path.isdir(runDir):
+        os.makedirs(runDir)
     
     #: Do file to start tracilla with qsub
-    dofn = '%s/do-CALIOP-EAD-%d-%02d-%s' %(runDir, year, mon, dnf)
+    dofn = '%s/do-CALIOP-EAD-%d%02d-%s' %(runDir, year, mon, dnf)
     #: File with paths used by tracilla
-    pathfn = '%s/path-CALIOP-EAD-%d-%02d-%s'  %(runDir, year, mon, dnf)
-
+    pathfn = '%s/path-CALIOP-EAD-%d%02d-%s'  %(runDir, year, mon, dnf)
     #: Result dir
-    outpath = '%s/CALIOP-EAD-%s%d-%s' %(outDir, abr, year, dnf)
-    #: part link from selCaliop. 
-    #: The program will create a link (outlink) to this one in the outpath
-    srclink = '%s/CALIOP-EAD/Part/part_000-%s%d-%s' %(outDir, abr, year, dnf)
+    resultDir = '%s/CALIOP-EAD-%d%02d-%s' %(dataDir, year, mon, dnf)
     #: Path for RELEASES and COMMAND files
-    optPath = '%s/CALIOP-EAD-%s%d-%s' %(optDir, abr, year, dnf)
+    optPath = '%s/CALIOP-EAD-%d%02d-%s' %(optDir, year, mon, dnf)
     #: The RELEASES file. This one is same for everyone
     src_Relise = '%s/RELEASES' %optDir
-    
     #: File with the printstatment traxilla is creating during run
-    trazilla_outfn = '%s/traczilla-CALIOP-EAD-%d-%02d-%s' %(runDir, year, mon, dnf)
+    trazilla_outfn = '%s/traczilla-CALIOP-EAD-%d%02d-%s' %(runDir, year, mon, dnf)
+    #: Part file
+    partName = 'part_000-%d%02d-%s' %(year, mon, dnf)
+    #: Param adn Catalog start of filename
+    iniStartName = 'selCaliop'
+    
     #: Qsub
     #:Outfile for qsub
     # qsub_outfile = '%s/O-${PBS_JOBNAME}-%s' %(runDir, dnf)
-    qsub_outfile = '%s/O-%d-%02d-%s' %(runDir, year, mon, dnf)
+    qsub_outfile = '%s/O-%d%02d-%s' %(runDir, year, mon, dnf)
     #: Jobname
-    jobname = '%s%d%s' %(abr, year, dnf)
+    jobname = '%d%02d%s' %(year, mon, dnf)
+    
     #: If dardar is used as input, add DD to keep seperated
     if useDardar:
         dofn = dofn + '-DD'
         pathfn = pathfn + '-DD'
         qsub_outfile = qsub_outfile + 'DD'
         trazilla_outfn = trazilla_outfn + '-DD'
-        srclink = srclink + '-DD'
-        outpath = outpath + '-DD'
+        partName = partName + '-DD'
+        resultDir = resultDir + '-DD'
         optPath = optPath + '-DD'
         jobname = jobname + 'DD'
-        
+        iniStartName = 'selDardar'
+    
+    #: Dir with initiation files
+    iniDir = '%s/Initfiles' %resultDir
+    #: Initiation files
+    paramName = partName.replace('part_000-', '%s_Params-' %iniStartName).replace('-DD', '') + '.pkl'
+    catalogName = partName.replace('part_000-', '%s_Calalog-' %iniStartName).replace('-DD', '') + '.pkl'
+    partFile = '%s/CALIOP-EAD/Part/%s' %(dataDir, partName)
+    paramFile = partFile.replace('/Part/', '/Param/').replace(partName, paramName)
+    catalogFile = partFile.replace('/Part/', '/Catalog/').replace(partName, catalogName) 
+
     #: Links to files used by tracilla
     #: startfile i.e. file from selCaliop
-    outlink = '%s/part_000' %outpath
+    outlink = '%s/part_000' %resultDir
     #: Link to RELEASES file.
     link_Relise = '%s/RELEASES' %optPath
     #: No link. File with commands for tracilla. Is created here
@@ -111,7 +114,7 @@ if __name__ == '__main__':
     #: Restartung an old run
     if args.cont:
         #: Make sure the old run exist
-        if not os.path.isfile(outpath + '/savpos'):
+        if not os.path.isfile(resultDir + '/savpos'):
             print('No savpos file from tracilla')
             print('Argument (-c --cont) cant be used')
             sys.exit()
@@ -150,29 +153,38 @@ if __name__ == '__main__':
         dof.writelines('\n')
         dof.close()
         
+        if year in [2017, 2007]:
+            availDir = '/data/ejohansson/ERA5/indexes'
+        else:
+            availDir = '/data/legras/flexpart_in/ERA5/indexes'
         
         print(pathfn)
         pathf = open(pathfn, 'w')
     #     pathf.writelines('/home/ejohansson/Projects/flexpart/traczilla/options/STC/Calipso/CALIOP-EAD-Jul2008/ \n')
         pathf.writelines('%s/ \n' %optPath)
-        pathf.writelines('%s/ \n' %outpath)
+        pathf.writelines('%s/ \n' %resultDir)
         pathf.writelines('/data/legras/flexpart_in/ERA5/indexes/ \n')
-        # pathf.writelines('/data/legras/flexpart_in/ERA5/indexes/AVAILABLE-%d-uvwt \n' %year)
-        pathf.writelines('/data/ejohansson/ERA5/indexes/AVAILABLE-%d-uvwt \n' %year)
+        pathf.writelines('%s/AVAILABLE-%d-uvwt \n' %(availDir, year))
         pathf.writelines('/data/legras/flexpart_in/ERA5/indexes/ \n')
-        # pathf.writelines('/data/legras/flexpart_in/ERA5/indexes/AVAILABLE-%d-hr \n' %year)
-        pathf.writelines('/data/ejohansson/ERA5/indexes/AVAILABLE-%d-hr \n' %year)
+        pathf.writelines('%s/AVAILABLE-%d-hr \n' %(availDir, year))
         pathf.close()
         
-        if not os.path.isdir(outpath):
-            os.makedirs(outpath)
+        if not os.path.isdir(resultDir):
+            os.makedirs(resultDir)
+        if not os.path.isdir(iniDir):
+            os.makedirs(iniDir)
+        if not os.path.isfile(iniDir + '/' + partName):
+            os.replace(partFile, iniDir + '/' + partName)
+            os.replace(paramFile, iniDir + '/' + paramName)
+            os.replace(catalogFile, iniDir + '/' + catalogName)
+        
         if not os.path.islink(outlink):
             #: Only controls if link exist not if broken
-            os.symlink(srclink, outlink)
+            os.symlink('Initfiles/' + partName, outlink)
         if not os.path.exists(outlink):
             #: Both controls if link exist and if broken
             print('broken link')
-            print('src = %s' %srclink)
+            print('src = %s' %(iniDir + '/' + partName))
             print('link = %s' %outlink)
             sys.exit()
             
@@ -196,8 +208,8 @@ if __name__ == '__main__':
     commandf.writelines("#                                           *\n")
     commandf.writelines("#*******************************************************************************\n")
     commandf.writelines(" &COMMAND\n")
-    commandf.writelines(" ibdate=%d%02d15 ibtime=000000\n" %(year_m2, mon_m2))
-    commandf.writelines(" iedate=%d%02d01 ietime=000000\n" %(year_p1, mon_p1))
+    commandf.writelines(" ibdate=%d%02d%02d ibtime=000000\n" %(endDate.year, endDate.month, endDate.day))
+    commandf.writelines(" iedate=%d%02d%02d ietime=000000\n" %(startDate.year, startDate.month, startDate.day))
     commandf.writelines(" diffus=0.\n")
     commandf.writelines(" release_plan='StratoClim'\n")
     commandf.writelines(" diftype=1\n")
@@ -227,7 +239,7 @@ if __name__ == '__main__':
     commandf.writelines("\n")
     commandf.close()
 
-    print(outpath)
+    print(resultDir)
     
     if args.qsub:
         cmd = "qsub %s" %dofn
