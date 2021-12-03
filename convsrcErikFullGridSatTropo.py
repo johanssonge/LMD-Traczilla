@@ -119,7 +119,7 @@ def main():
 
     """ Parameters """
     step = args.step
-    hmax = 1848
+    hmax = 1800 #: 75 days (75 * 24 = 1800)
     #hmax = 18
     dstep = timedelta(hours=step)
     # time width of the parcel slice
@@ -132,6 +132,7 @@ def main():
     month = args.month
     #day1=1
     #day2=31
+    #: Age bound, Just smaller than tracilla max_life_time=42
     age_bound = 41.75
     advect = 'EAD'
     suffix =''
@@ -168,13 +169,15 @@ def main():
     if not os.path.isdir(out_dir + '/out'):
         os.makedirs(out_dir + '/out')
     else:    
-        print('out_dir directory already created')    
+        print('out_dir directory already created')
+    print('Out_dir = %s\n' %out_dir)
+    
     # Dates beginning and end
     #date_beg = datetime(year=year, month=month, day=day1, hour=0)
     date_end = datetime(year=year, month=month, day=1, hour=0)
     
     #: filename of outfiles
-    outnames = 'CALIOP-'+advect+'-'+date_end.strftime('%b%Y')+diffus+'-%s' %args.night 
+    outnames = 'CALIOP-'+advect+'-'+date_end.strftime('%Y%m')+diffus+'-%s' %args.night 
     if args.use_dardar:
         outnames = outnames + '-DD'
     # Manage the file that receives the print output
@@ -503,6 +506,8 @@ def main():
     """ End of the procedure and storage of the result """
     #output file
     fk.save(out_file2,prod0,compression='zlib')
+    os.remove(bak_file_prod0)
+    os.remove(bak_file_params)
     #pickle.dump(prod0,gzip.open(out_file,'wb'))
     # close the print file
     if quiet: fsock.close()
