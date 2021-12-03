@@ -43,7 +43,7 @@ I_STOP = I_HIT + I_DEAD
 
 #:----------------------------------------------------
 
-def readCatalogFile(fn):
+def readCatalogFile(fn, p0=None):
     objects = []
     with (gzip.open(fn, "rb")) as openfile:
         while True:
@@ -51,7 +51,33 @@ def readCatalogFile(fn):
                 objects.append(pickle.load(openfile))
             except EOFError:
                 break
-    return objects[0]
+    if p0 is not None:
+        retv = {'CM': np.zeros(p0['numpart']), 'TpH': np.zeros(p0['numpart']), \
+                'SZA': np.zeros(p0['numpart']), 'SC': np.zeros(p0['numpart'])}
+        temp = objects[0]
+        sp = 0
+        for da in temp.keys():
+            for orbit in temp[da].keys():
+                ep = sp + temp[da][orbit]['npart']
+                retv['CM'][sp:ep] = temp[da][orbit]['Cloud_Mask']
+                retv['TpH'][sp:ep] = temp[da][orbit]['Tropopause_Height']
+                retv['SZA'][sp:ep] = temp[da][orbit]['SZA']
+                retv['SC'][sp:ep] = temp[da][orbit]['Simplified_Categorization']
+                #: Test to make sure the param korrespond to the part0
+                if not temp[da][orbit]['longitudes'][0] == p0['x'][sp]:
+                    print('Lon 0 test')
+                    pdb.set_trace()
+                #: Not sure why -1
+                if not temp[da][orbit]['longitudes'][1] == p0['x'][ep-1]:
+                    print('Lon 1 test')
+                    pdb.set_trace()
+                
+                sp = ep
+    else:
+        retv = objects[0]
+    
+    return retv
+
 
 def readConvFile(fn, usefk=False):
     """ 
@@ -131,13 +157,15 @@ if __name__ == '__main__':
     datPath = os.environ['HOME'].replace('/home/', '/data/')
     scrPath = os.environ['HOME'].replace('/home/', '/scratchu/')
     mainDir = '%s/flexout/STC/Calipso' %datPath
-    # trajDir = '%s/flexout/STC/Calipso' %datPath
     outDir = '%s/flexout/STC/Calipso-OUT' %datPath
     plotDir = '%s/LMD-Traczilla/Plots' %scrPath
     
-    paramDir = '%s/CALIOP-EAD/Param' %mainDir
-    catalogDir = '%s/CALIOP-EAD/Catalog' %mainDir
     compare = False
+    year = 2007
+    month = 6
+    dn = 'n'
+    useDardar = True
+    
     # outDir = '/data/ejohansson/flexout/STC/Calipso-OUT/Coldpoint'
     #: filename of outfiles
     # outnames = 'CALIOP-'+advect+'-'+date_end.strftime('%b%Y')+diffus+'-%s' %args.night 
@@ -145,16 +173,17 @@ if __name__ == '__main__':
     #     outnames = outnames + '-DD'
     
     #: Directories of the backward trajectories and name of the output file
-    outname = 'CALIOP-EAD-May2019-n-DD'
+    outname = 'CALIOP-EAD-%d%02d-%s' %(year, month, dn)
+    if useDardar:
+        outname = outname + '-DD'
+    trajDir = os.path.join(mainDir,outname) 
+    initDir = os.path.join(trajDir, 'Initfiles')
     
     paramname = 'selDardar_Params-%s.pkl' %'-'.join(outname.split('-')[2:4])
     catalogname = paramname.replace('_Params-', '_Calalog-')
-    paramFile = os.path.join(paramDir, paramname)
-    catalFile = os.path.join(catalogDir, catalogname)
+    paramFile = os.path.join(initDir, paramname)
+    catalFile = os.path.join(initDir, catalogname)
     
-    catalog = readCatalogFile(catalFile)
-    trajDir = os.path.join(mainDir,outname) 
-    fname = os.path.join(outDir, outname + '.h5')
 
     #: Read the index file that contains the initial positions
     part0 = readidx107(os.path.join(trajDir,'part_000'),quiet=False)
@@ -162,8 +191,10 @@ if __name__ == '__main__':
     #:
     
     
+    fname = os.path.join(outDir, outname + '.h5')
     rvs, fls, age, lons, lats, temp, pres = readConvFile(fname)
     
+    catalog = readCatalogFile(catalFile, part0)
     # print(time.time() - tic)
     old = (fls & I_OLD) == I_OLD
     hits = (fls & I_HIT) == I_HIT
@@ -188,6 +219,11 @@ if __name__ == '__main__':
         lons2 = checkLons(lons2, hits2)
         lons3 = checkLons(lons3, hits3)
         lons4 = checkLons(lons4, hits4)
+    
+    #: --- Plot ---
+    
+    
+    
     
     #: --- Plot ---
     
