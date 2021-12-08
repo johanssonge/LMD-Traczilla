@@ -28,6 +28,7 @@ import psutil
 import flammkuchen as fk
 from scipy.interpolate import RegularGridInterpolator
 import pdb
+import time
 
 sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
 from ECMWF_N import ECMWF
@@ -96,8 +97,8 @@ def main():
                         help="Create backup files. Default = False")
     parser.add_argument("-c","--cont", action='store_true', default = False,  
                         help = "Continue from backup. Default = False")
-    parser.add_argument("-bs", "--bakstep", type=int, default=40, 
-                        help='backup step (hour) to be multiply with step. Default = 40')
+    parser.add_argument("-bs", "--bakstep", type=int, default=39, 
+                        help='backup step (hour) to be multiply with step. Default = 39')
 
     args = parser.parse_args()
     
@@ -283,6 +284,8 @@ def main():
         
         [offset, nhits, nexits, nold, ndborne, nnew, new, current_date] = params['params']
         partStep[offset] = readpart107(offset,ftraj,quiet=True)
+        if isinstance(partStep[offset]['x'], list):
+            partStep[offset]['x'] = np.asarray(partStep[offset]['x'])
         partStep[offset]['x'][partStep[offset]['x']>180] -= 360
         # Initialize sat and ERA5 yield one step ahead as a precaution
         get_sat = read_sat(current_date + dstep,dtRange,pre=True,vshift=vshift)
@@ -500,9 +503,11 @@ def main():
         if backup & (hour % backup_step == 0):
             print("Save backup")
             print(bak_file_prod0)
+            tic = time.time()
             fk.save(bak_file_prod0, prod0)
             fk.save(bak_file_params,{'params': [hour, nhits, nexits, nold, ndborne, nnew, new, current_date]})
-
+            toc = time.time()
+            print('It takes %d s to save backupfiles' %(int(toc - tic)))
     """ End of the procedure and storage of the result """
     #output file
     fk.save(out_file2,prod0,compression='zlib')
