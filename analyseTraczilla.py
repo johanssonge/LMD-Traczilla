@@ -198,11 +198,12 @@ if __name__ == '__main__':
     # print(time.time() - tic)
     old = (fls & I_OLD) == I_OLD
     hits = (fls & I_HIT) == I_HIT
-    
+
     lons = checkLons(lons, hits)
     # originDate, idxDates = getDates(part0, hits)
-    pdb.set_trace()
-    
+    cloudy = (catalog['CM'] > 0)
+    hits_cld = hits & cloudy
+    hits_clr = hits & ~cloudy
     if compare:
         outDirCP = '%s/flexout/STC/Calipso-OUT/Coldpoint' %datPath
         outDirOrg = '%s/flexout/STC/Calipso-OUT/Org' %datPath
@@ -221,10 +222,50 @@ if __name__ == '__main__':
         lons4 = checkLons(lons4, hits4)
     
     #: --- Plot ---
+    fig = plt.figure()
+    fig.suptitle('Age histogram')
+    ax = fig.add_subplot(1,1,1)
+    ax.hist(age[hits] / 86400, bins=400)#, density=True)
+    ax.set_xlabel('Age [days]')
+    ax.set_title('Hits pixels')
+    ax.text(0.7, 0.9,'total = %d' %hits.sum(),
+            horizontalalignment='center',
+            verticalalignment='center',
+            transform = ax.transAxes)
+    plt.tight_layout()
+    figname = '%s/hist_age_all' %plotDir
+    fig.savefig(figname + '.png')
     
+    #: --- Plot ---
+    fig = plt.figure()
+    ax = fig.add_subplot(1,1,1)
+    ax.hist(age[hits_cld] / 86400, bins=400)#, density=True)
+    ax.set_xlabel('Age [days]')
+    ax.set_title('Hits and Cloudy pixels')
+    ax.text(0.7, 0.9,'total = %d' %hits_cld.sum(),
+            horizontalalignment='center',
+            verticalalignment='center',
+            transform = ax.transAxes)
+    plt.tight_layout()
+    figname = '%s/hist_age_cld' %plotDir
+    fig.savefig(figname + '.png')
     
-    
-    
+    #: --- Plot ---
+    fig = plt.figure()
+    # fig.suptitle('Age histogram')
+    ax = fig.add_subplot(1,1,1)
+    ax.hist(age[hits_clr] / 86400, bins=400)#, density=True)
+    ax.set_xlabel('Age [days]')
+    ax.set_title('Hits and Clear pixels')
+    ax.text(0.7, 0.9,'total = %d' %hits_clr.sum(),
+            horizontalalignment='center',
+            verticalalignment='center',
+            transform = ax.transAxes)
+    plt.tight_layout()
+    figname = '%s/hist_age_clr' %plotDir
+    fig.savefig(figname + '.png')
+ 
+    pdb.set_trace()
     #: --- Plot ---
     
     if compare:
@@ -258,9 +299,6 @@ if __name__ == '__main__':
         ax.set_ylabel('Pressure')
         ax.set_title('WMO - Calipso')
         
-        plt.tight_layout()
-        figname = '%s/comp_2dhist_age_pres' %plotDir
-        fig.savefig(figname + '.png')
     
         fig = plt.figure()
         fig.suptitle('Comparing age histograms')
