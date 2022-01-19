@@ -35,6 +35,35 @@ import io107
 import pdb
 import sys
 
+
+def removeLeapsecond(tid, mask):
+    # test = tid.copy()
+    a = -1
+    for t in tid:
+        a = a + 1
+        try:
+            t.utc.datetime
+        except:
+            # ms = float('0.%s' %t.utc.value.split('.')[-1])
+            tid[a] = (t - TimeDelta(1, format='sec'))
+            # if ms > 0.9:
+            #     tid[a] = (t + TimeDelta(1, format='sec'))
+            
+            mask[a] = False
+    tid = tid.utc.datetime
+    return tid, mask
+
+
+def createTime(tai):
+    tt = Time('1993-01-01 00:00:00',scale='tai') + TimeDelta(tai, format='sec')
+    LSmask = np.ones(tt.shape).astype(bool)
+    try:
+        utc = tt.utc.datetime
+    except ValueError:
+        utc, LSmask = removeLeapsecond(tt, LSmask)
+    return utc, LSmask
+
+
 def readDARDAR(fname, dn):
     # open file
     ncf = netCDF4.Dataset(fname,'r')
@@ -49,9 +78,7 @@ def readDARDAR(fname, dn):
         temp = ncf.variables['Temperature'][:].data
         # Read time
         tai = ncf.variables['CLOUDSAT_TAI_Time'][:].data
-        tt = Time('1993-01-01 00:00:00',scale='tai') + TimeDelta(tai, format='sec')
-        utc = tt.utc.datetime
-
+        utc, LSmask = createTime(tai)
         #: Extras
         #: Cloud Mask
         clm = ncf.variables['CLOUDSAT_2B_GEOPROF_CPR_Cloud_Mask'][:].data
@@ -95,7 +122,7 @@ def readDARDAR(fname, dn):
         # np.datetime64('%s-%s-%s %s' %(sy, sm, sd, st))
         utc = np.datetime64('%s-%s-%s %s' %(sy, sm, sd, st)) + ncf.variables['time'][:].data.astype('timedelta64[s]')
         utc = np.asarray(utc.tolist())
-
+    #: Lons between 0  and 360
     #: Cut day/nigh/all
     #: 1D
     lats = lats[dnf]
@@ -180,7 +207,7 @@ if __name__ == '__main__':
     #: End day of the selection
     # year = 2017
     # month = 8
-    day = 1
+    # day = 1
     
     args = parser.parse_args()
     year = args.year
@@ -200,7 +227,7 @@ if __name__ == '__main__':
     # Define dates and date interval
     endDate = datetime(year, month, 1, 0)
     originDate = endDate + relativedelta(months=1)
-    interdate = 3
+    interdate = 1
     
     # Main irectories for aerosol profiles and L1 data
     if (year > 2020) or ((year == 2020) and (month >= 7)):
@@ -328,12 +355,14 @@ if __name__ == '__main__':
             lats = lats[sel]
             lons = lons[sel]
             utc = utc[sel]
-
-            ir_start = np.array([int((utc[i] - originDate).total_seconds()) for i in range(len(utc))])
+            # Selection of Vertical 1D data
+            altx = altx[altidx]
             # Selection of the 2D data
             pres = pres[sel,:][:,altidx]
             temp = temp[sel,:][:,altidx]
+
             # Expand the 1D fields
+            ir_start = np.array([int((utc[i] - originDate).total_seconds()) for i in range(len(utc))])
             ir_start = np.repeat(ir_start,nlev).astype(int)
             lats = np.repeat(lats,nlev)
             lons = np.repeat(lons,nlev)
@@ -367,7 +396,7 @@ if __name__ == '__main__':
                 
             catalog[date][orbit] = {'longitudes':[lons[0],lons[-1]],
                                     'utc':[utc[0],utc[-1]],'selection':sel,'lensel':len(sel),
-                                    'npart':npart, 
+                                    'npart':npart, 'Track_Height': altx,
                                     'Cloud_Mask': extras['Cloud_Mask'], 'Tropopause_Height': extras['Tropopause_Height'], 
                                     'SZA': extras['SZA'], 'Simplified_Categorization': extras['Simplified_Categorization']}
             print(date,orbit,len(sel),npart)
@@ -381,7 +410,6 @@ if __name__ == '__main__':
             part0['ir_start'] = np.append(part0['ir_start'],ir_start)
             part0['idx_back'] = np.append(part0['idx_back'],np.arange(idx1+1,numpart+1,dtype=int))
             part0['flag'] = np.append(part0['flag'],np.full(npart,127,dtype=int))
-
         date -= timedelta(days=interdate)
         
     # store the dictionary of traces
