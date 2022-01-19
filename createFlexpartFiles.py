@@ -19,6 +19,7 @@ import os
 import sys
 import datetime
 from dateutil.relativedelta import relativedelta  # @UnresolvedImport
+import shutil
 
 if __name__ == '__main__':
     import argparse
@@ -55,6 +56,7 @@ if __name__ == '__main__':
     runDir = '/home/ejohansson/Projects/flexpart/work/STC/Calipso/%d' %year
     optDir = '/home/ejohansson/Projects/flexpart/traczilla/options/STC/Calipso'
     dataDir = '/data/ejohansson/flexout/STC/Calipso'
+    ekjDir = '/proju/flexpart/flexpart_in/EKJ/ejohansson/flexout/STC/Calipso'
     if not os.path.isdir(runDir):
         os.makedirs(runDir)
     
@@ -63,7 +65,7 @@ if __name__ == '__main__':
     #: File with paths used by tracilla
     pathfn = '%s/path-CALIOP-EAD-%d%02d-%s'  %(runDir, year, mon, dnf)
     #: Result dir
-    resultDir = '%s/CALIOP-EAD-%d%02d-%s' %(dataDir, year, mon, dnf)
+    resultDir = '%s/CALIOP-EAD-%d%02d-%s' %(ekjDir, year, mon, dnf)
     #: Path for RELEASES and COMMAND files
     optPath = '%s/CALIOP-EAD-%d%02d-%s' %(optDir, year, mon, dnf)
     #: The RELEASES file. This one is same for everyone
@@ -152,12 +154,12 @@ if __name__ == '__main__':
         dof.writelines('/home/legras/flexpart/new6-devel/TRACZILLA-TT-par-ng %s > %s \n' %(pathfn, trazilla_outfn))
         dof.writelines('\n')
         dof.close()
-        
-        if year in [2017, 2007]:
-            availDir = '/data/ejohansson/ERA5/indexes'
-        else:
-            availDir = '/data/legras/flexpart_in/ERA5/indexes'
-        
+        availDir = '/data/ejohansson/ERA5/indexes'
+        if not (os.path.isfile('%s/AVAILABLE-%d-uvwt' %(availDir, year)) and os.path.isfile('%s/AVAILABLE-%d-hr' %(availDir, year))):
+            print('ERA5-indexes are missing. Use mkAVAILABLE.py to create')
+            print('%s/AVAILABLE-%d-uvwt \n' %(availDir, year))
+            print('%s/AVAILABLE-%d-hr \n' %(availDir, year))
+            sys.exit()
         print(pathfn)
         pathf = open(pathfn, 'w')
     #     pathf.writelines('/home/ejohansson/Projects/flexpart/traczilla/options/STC/Calipso/CALIOP-EAD-Jul2008/ \n')
@@ -174,9 +176,9 @@ if __name__ == '__main__':
         if not os.path.isdir(iniDir):
             os.makedirs(iniDir)
         if not os.path.isfile(iniDir + '/' + partName):
-            os.replace(partFile, iniDir + '/' + partName)
-            os.replace(paramFile, iniDir + '/' + paramName)
-            os.replace(catalogFile, iniDir + '/' + catalogName)
+            shutil.move(partFile, iniDir + '/' + partName)
+            shutil.move(paramFile, iniDir + '/' + paramName)
+            shutil.move(catalogFile, iniDir + '/' + catalogName)
         
         if not os.path.islink(outlink):
             #: Only controls if link exist not if broken
