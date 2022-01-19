@@ -18,21 +18,21 @@ Adapted on Tuesday 14 September 2021
 import socket
 import numpy as np
 from collections import defaultdict
-from numba import jit
+from numba import jit  # @UnresolvedImport
 from datetime import datetime, timedelta
-from dateutil.relativedelta import relativedelta
+from dateutil.relativedelta import relativedelta  # @UnresolvedImport
 import os
 import sys
 import argparse
-import psutil
-import flammkuchen as fk
-from scipy.interpolate import RegularGridInterpolator
+import psutil  # @UnresolvedImport
+import flammkuchen as fk  # @UnresolvedImport
+from scipy.interpolate import RegularGridInterpolator  # @UnresolvedImport
 import pdb
 import time
 
 sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
-from ECMWF_N import ECMWF
-import geosat
+from ECMWF_N import ECMWF  # @UnresolvedImport
+import geosat  # @UnresolvedImport
 #import constants as cst
 from io107 import readpart107, readidx107
 
@@ -108,7 +108,8 @@ def main():
         #main_sat_dir = '/data/legras/flexpart_in/SAFNWC'
             #SVC_Dir = '/bdd/CFMIP/SEL2'
         datPath = os.environ['HOME'].replace('/home/', '/data/')
-        traj_dir = '%s/flexout/STC/Calipso' %datPath
+        ekjDir = '/proju/flexpart/flexpart_in/EKJ/ejohansson'
+        traj_dir = '%s/flexout/STC/Calipso' %ekjDir
         out_dir = '%s/flexout/STC/Calipso-OUT' %datPath
         #out_dir = '/data/legras/STC'
     elif ('climserv' in socket.gethostname()) | ('polytechnique' in socket.gethostname()):
@@ -222,6 +223,8 @@ def main():
     
     # Read the index file that contains the initial positions
     part0 = readidx107(os.path.join(ftraj,'part_000'),quiet=False)
+    part0['x'] = np.where(part0['x']>180, part0['x'] - 360, part0['x'])
+    
     print('numpart',part0['numpart'])
     # stamp_date not set in these runs
     # current_date actually shifted by one day / sdate
@@ -429,6 +432,7 @@ def main():
             # Check x within (-180,180), necessary when GridSat is used
             #if datpart['x'] != []:
             if len(datpart['x'])>0:
+                #: datpart['x'] = np.where(datpart['x']>180, datpart['x'] - 360, datpart['x'])
                 datpart['x'] = (datpart['x']+180)%360 - 180
             if verbose: print('part slice ',i, datpart['time'])
             # Check whether the present satellite image is valid
@@ -485,7 +489,10 @@ def main():
             prod0['src']['age'][idx_IIold-IDX_ORGN] = ((part0['ir_start'][idx_IIold-IDX_ORGN]- partante['itime'])/86400)
             print("number of IIold ",len(idx_IIold))
             nold += len(idx_IIold)
-             
+            # if len(prod0['src']['x']) > 0:
+            #     if ((prod0['src']['x'] > 180).any() or (prod0['src']['x']<-180).any()):
+            #         print('Check x')
+            #         pdb.set_trace()
         # find parcels still alive       if kept_p.sum()==0:
         try:
             nlive = ((prod0['flag_source'][partpost['idx_back']-IDX_ORGN] & I_DEAD) == 0).sum()
@@ -510,6 +517,10 @@ def main():
             print('It takes %d s to save backupfiles' %(int(toc - tic)))
     """ End of the procedure and storage of the result """
     #output file
+    # prod0['src']['x'] = np.where(prod0['src']['x'] > 180, prod0['src']['x'] - 360, prod0['src']['x'])
+    print('Max and Min of x')
+    print(prod0['src']['x'].max())
+    print(prod0['src']['x'].min())
     fk.save(out_file2,prod0,compression='zlib')
     os.remove(bak_file_prod0)
     os.remove(bak_file_params)
