@@ -20,10 +20,12 @@ parser.add_argument("-m1","--month1",type=int,choices=1+np.arange(12),help="firs
 parser.add_argument("-m2","--month2",type=int,choices=1+np.arange(12),help="last month")
 parser.add_argument("-t","--typ",type=str,choices=('uvwt','hr','all'),help="all (default), uvwt or hr")
 
-year = 2010
-m1 = 1
-m2 = 4
+year = 2016
+m1 = 12
+m2 = 12
 typ = "all"
+
+
 
 args = parser.parse_args()
 if args.year is not None: year = args.year
@@ -31,7 +33,7 @@ if args.month1 is not None: m1 = args.month1
 if args.month2 is not None: m2 = args.month2
 if args.typ is not None: typ = args.typ
 
-os.chdir(os.path.join("/home/legras/ERA5/indexes",str(year)))
+# os.chdir(os.path.join("/home/legras/ERA5/indexes",str(year)))
 for mm in range(m1,m2+1):
     date = datetime(year,mm,1)
     # call(["grib_index_build","-o",date.strftime("uvwt-%Y-%m.gribidx"),
