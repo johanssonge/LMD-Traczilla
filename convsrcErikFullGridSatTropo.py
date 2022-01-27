@@ -524,6 +524,7 @@ def main():
     fk.save(out_file2,prod0,compression='zlib')
     os.remove(bak_file_prod0)
     os.remove(bak_file_params)
+    print('DONE')
     #pickle.dump(prod0,gzip.open(out_file,'wb'))
     # close the print file
     if quiet: fsock.close()
