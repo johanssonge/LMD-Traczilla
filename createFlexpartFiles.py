@@ -137,6 +137,37 @@ if __name__ == '__main__':
         #: -1 means new run
         restart = -1
         
+        #: Create and move some Dir/Files/Linkes
+        if not os.path.isdir(resultDir):
+            os.makedirs(resultDir)
+        if not os.path.isdir(iniDir):
+            os.makedirs(iniDir)
+        if not os.path.isfile(iniDir + '/' + partName):
+            shutil.move(partFile, iniDir + '/' + partName)
+            shutil.move(paramFile, iniDir + '/' + paramName)
+            shutil.move(catalogFile, iniDir + '/' + catalogName)
+        
+        if not os.path.islink(outlink):
+            #: Only controls if link exist not if broken
+            os.symlink('Initfiles/' + partName, outlink)
+        if not os.path.exists(outlink):
+            #: Both controls if link exist and if broken
+            print('broken link')
+            print('src = %s' %(iniDir + '/' + partName))
+            print('link = %s' %outlink)
+            sys.exit()
+            
+        if not os.path.isdir(optPath):
+            os.makedirs(optPath)
+        if not os.path.islink(link_Relise):
+            os.symlink(src_Relise, link_Relise)
+        if not os.path.exists(link_Relise):
+            print('broken link')
+            print('src = %s' %src_Relise)
+            print('link = %s' %link_Relise)
+            sys.exit()
+        
+        #: Create do-file
         print(dofn)
         dof = open(dofn, 'w')
         dof.writelines('#!/bin/bash \n')
@@ -171,34 +202,6 @@ if __name__ == '__main__':
         pathf.writelines('%s/AVAILABLE-%d-hr \n' %(availDir, year))
         pathf.close()
         
-        if not os.path.isdir(resultDir):
-            os.makedirs(resultDir)
-        if not os.path.isdir(iniDir):
-            os.makedirs(iniDir)
-        if not os.path.isfile(iniDir + '/' + partName):
-            shutil.move(partFile, iniDir + '/' + partName)
-            shutil.move(paramFile, iniDir + '/' + paramName)
-            shutil.move(catalogFile, iniDir + '/' + catalogName)
-        
-        if not os.path.islink(outlink):
-            #: Only controls if link exist not if broken
-            os.symlink('Initfiles/' + partName, outlink)
-        if not os.path.exists(outlink):
-            #: Both controls if link exist and if broken
-            print('broken link')
-            print('src = %s' %(iniDir + '/' + partName))
-            print('link = %s' %outlink)
-            sys.exit()
-            
-        if not os.path.isdir(optPath):
-            os.makedirs(optPath)
-        if not os.path.islink(link_Relise):
-            os.symlink(src_Relise, link_Relise)
-        if not os.path.exists(link_Relise):
-            print('broken link')
-            print('src = %s' %src_Relise)
-            print('link = %s' %link_Relise)
-            sys.exit()
 
     print(commandfn)
     commandf = open(commandfn, 'w')
