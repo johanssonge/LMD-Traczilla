@@ -37,8 +37,45 @@ I_DBORNE =  0x1000000 #: Lost after first step
 I_OLD = 0x800000 #: Reached end of time without encounter a cloud
 I_STOP = I_HIT + I_DEAD
 
+magic = 0.84
 
 
+#:----------------------------------------------------
+
+def readParamFile(fn):
+    objects = []
+    # with (gzip.open(fn, "rb")) as openfile:
+    with (open(fn, "rb")) as openfile:
+        while True:
+            try:
+                objects.append(pickle.load(openfile))
+            except EOFError:
+                break
+    # if p0 is not None:
+    #     retv = {'CM': np.zeros(p0['numpart']), 'TpH': np.zeros(p0['numpart']), \
+    #             'SZA': np.zeros(p0['numpart']), 'SC': np.zeros(p0['numpart'])}
+    #     temp = objects[0]
+    #     sp = 0
+    #     for da in temp.keys():
+    #         for orbit in temp[da].keys():
+    #             ep = sp + temp[da][orbit]['npart']
+    #             retv['CM'][sp:ep] = temp[da][orbit]['Cloud_Mask']
+    #             retv['TpH'][sp:ep] = temp[da][orbit]['Tropopause_Height']
+    #             retv['SZA'][sp:ep] = temp[da][orbit]['SZA']
+    #             retv['SC'][sp:ep] = temp[da][orbit]['Simplified_Categorization']
+    #             #: Test to make sure the param korrespond to the part0
+    #             if not temp[da][orbit]['longitudes'][0] == p0['x'][sp]:
+    #                 print('Lon 0 test')
+    #                 pdb.set_trace()
+    #             #: Not sure why -1
+    #             if not temp[da][orbit]['longitudes'][1] == p0['x'][ep-1]:
+    #                 print('Lon 1 test')
+    #                 pdb.set_trace()
+    #             # pdb.set_trace()
+    #             sp = ep
+    # else:
+    retv = objects[0]
+    return retv
 
 
 #:----------------------------------------------------
@@ -53,7 +90,8 @@ def readCatalogFile(fn, p0=None):
                 break
     if p0 is not None:
         retv = {'CM': np.zeros(p0['numpart']), 'TpH': np.zeros(p0['numpart']), \
-                'SZA': np.zeros(p0['numpart']), 'SC': np.zeros(p0['numpart'])}
+                'SZA': np.zeros(p0['numpart']), 'SC': np.zeros(p0['numpart']), \
+                'lensel': np.zeros(p0['numpart']), 'npart': np.zeros(p0['numpart'])}
         temp = objects[0]
         sp = 0
         for da in temp.keys():
@@ -63,6 +101,8 @@ def readCatalogFile(fn, p0=None):
                 retv['TpH'][sp:ep] = temp[da][orbit]['Tropopause_Height']
                 retv['SZA'][sp:ep] = temp[da][orbit]['SZA']
                 retv['SC'][sp:ep] = temp[da][orbit]['Simplified_Categorization']
+                retv['lensel'][sp:ep] = np.repeat(temp[da][orbit]['lensel'], (ep-sp))
+                retv['npart'][sp:ep] = np.repeat(temp[da][orbit]['npart'], (ep-sp))
                 #: Test to make sure the param korrespond to the part0
                 if not temp[da][orbit]['longitudes'][0] == p0['x'][sp]:
                     print('Lon 0 test')
@@ -71,11 +111,10 @@ def readCatalogFile(fn, p0=None):
                 if not temp[da][orbit]['longitudes'][1] == p0['x'][ep-1]:
                     print('Lon 1 test')
                     pdb.set_trace()
-                
+                # pdb.set_trace()
                 sp = ep
     else:
         retv = objects[0]
-    
     return retv
 
 
@@ -109,6 +148,86 @@ def readConvFile(fn, usefk=False):
     return rvs, fls, age, lons, lats, temp, pres
 
 
+def getInitfiles(mD, years, months, dn, uD):
+    if (not isinstance(years, list)) or (not isinstance(months, list)):
+        print('Wrong type')
+        pdb.set_trace()
+    outnames = []
+    i = -1
+    for y in years:
+        for m in months:
+            i = i + 1
+            #: Directories of the backward trajectories and name of the output file
+            outname = 'CALIOP-EAD-%d%02d-%s' %(y, m, dn)
+            if uD:
+                outname = outname + '-DD'
+            outnames.append(outname)
+            trajDir = os.path.join(mD,outname) 
+            initDir = os.path.join(trajDir, 'Initfiles')
+            
+            paramname = 'selDardar_Params-%s.pkl' %'-'.join(outname.split('-')[2:4])
+            catalogname = paramname.replace('_Params-', '_Calalog-')
+            paramFile = os.path.join(initDir, paramname)
+            catalFile = os.path.join(initDir, catalogname)
+            pf = readidx107(os.path.join(trajDir,'part_000'),quiet=False)
+            cf = readCatalogFile(catalFile, pf)
+            mf = readParamFile(paramFile)
+            pf['x'] = np.where(pf['x'] > 180, pf['x'] - 360, pf['x'])
+            if i == 0:
+                retvP = pf.copy()
+                retvC = cf.copy()
+                retvM = mf.copy()
+            else:
+                for arname in retvP.keys():
+                    if isinstance(retvP[arname], int):
+                        retvP[arname] = [retvP[arname]]
+                    if isinstance(pf[arname], int):
+                        pf[arname] = [pf[arname]]
+                    retvP[arname] = np.concatenate((np.asarray(retvP[arname]), np.asarray(pf[arname])))
+                
+                for arname in retvC.keys():
+                    if isinstance(retvC[arname], int):
+                        retvC[arname] = [retvC[arname]]
+                    if isinstance(cf[arname], int):
+                        cf[arname] = [cf[arname]]
+                    retvC[arname] = np.concatenate((np.asarray(retvC[arname]), np.asarray(cf[arname])))
+                
+                for arname in retvM.keys():
+                    if isinstance(retvM[arname], (int, np.int64, str, datetime.datetime)):
+                        retvM[arname] = [retvM[arname]]
+                    if isinstance(mf[arname], (int, np.int64, str, datetime.datetime)):
+                        mf[arname] = [mf[arname]]
+                    retvM[arname] = np.concatenate((np.asarray(retvM[arname]), np.asarray(mf[arname])))
+    
+    return retvP, retvC, retvM, outnames
+
+
+def getConvfiles(oD, onames):
+    i = -1
+    for outname in onames:
+        i = i + 1
+        fname = os.path.join(oD, outname + '.h5')
+        rvs, fls, age, lons, lats, temp, pres = readConvFile(fname)
+        if i == 0:
+            retvRvs = rvs.copy()
+            retvFls = fls.copy()
+            retvAge = age.copy()
+            retvLons = lons.copy()
+            retvLats = lats.copy()
+            retvTemp = temp.copy()
+            retvPres = pres.copy()
+        else:
+            retvRvs = np.concatenate((retvRvs, rvs))
+            retvFls = np.concatenate((retvFls, fls))
+            retvAge = np.concatenate((retvAge, age))
+            retvLons = np.concatenate((retvLons, lons))
+            retvLats = np.concatenate((retvLats, lats))
+            retvTemp = np.concatenate((retvTemp, temp))
+            retvPres = np.concatenate((retvPres, pres))
+            
+    return retvRvs, retvFls, retvAge, retvLons, retvLats, retvTemp, retvPres
+
+
 def checkLons(lon, hit = None):
     """
     Make sure longitudes are in range
@@ -124,8 +243,14 @@ def checkLons(lon, hit = None):
             print('Check lons')
             print('lons max = %f' %lon[hit].max())
             sys.exit()
-    retv = np.where(lon > 180, lon-360, lon)
-    return retv
+        if lon[hit].min() < -180:
+            print('\n')
+            print('Check lons')
+            print('lons min = %f' %lon[hit].max())
+            sys.exit()
+    lon = np.where(lon > 180, lon - 360, lon)
+    lon = np.where(lon < -180, lon + 360, lon)
+    return lon
 
 
 def getDates(parf, inds=None):
@@ -148,6 +273,16 @@ def getDates(parf, inds=None):
     return originDate, idxDates
 
 
+def conv2DHistToImage(h, x, y):
+    xstep = x[3] - x[2]  # @UnusedVariable
+    ystep = y[3] - y[2]
+    yim = np.arange(-60, 60, ystep)
+    yargmin = np.argmin(np.abs(yim - y[0]))
+    yargmax = np.argmin(np.abs(yim - y[-1]))
+    him = np.zeros([h.shape[0], yim.shape[0]])
+    him[:, yargmin: yargmax] = h
+    return him
+
 
 if __name__ == '__main__':
     
@@ -156,13 +291,14 @@ if __name__ == '__main__':
             #SVC_Dir = '/bdd/CFMIP/SEL2'
     datPath = os.environ['HOME'].replace('/home/', '/data/')
     scrPath = os.environ['HOME'].replace('/home/', '/scratchu/')
-    mainDir = '%s/flexout/STC/Calipso' %datPath
+    ekjDir = '/proju/flexpart/flexpart_in/EKJ/ejohansson'
+    mainDir = '%s/flexout/STC/Calipso' %ekjDir
     outDir = '%s/flexout/STC/Calipso-OUT' %datPath
     plotDir = '%s/LMD-Traczilla/Plots' %scrPath
     
     compare = False
-    year = 2007
-    month = 6
+    year = [2008]
+    month = [1]#[*range(1, 13)]#[1]
     dn = 'n'
     useDardar = True
     
@@ -171,40 +307,52 @@ if __name__ == '__main__':
     # outnames = 'CALIOP-'+advect+'-'+date_end.strftime('%b%Y')+diffus+'-%s' %args.night 
     # if args.use_dardar:
     #     outnames = outnames + '-DD'
-    
-    #: Directories of the backward trajectories and name of the output file
-    outname = 'CALIOP-EAD-%d%02d-%s' %(year, month, dn)
-    if useDardar:
-        outname = outname + '-DD'
-    trajDir = os.path.join(mainDir,outname) 
-    initDir = os.path.join(trajDir, 'Initfiles')
-    
-    paramname = 'selDardar_Params-%s.pkl' %'-'.join(outname.split('-')[2:4])
-    catalogname = paramname.replace('_Params-', '_Calalog-')
-    paramFile = os.path.join(initDir, paramname)
-    catalFile = os.path.join(initDir, catalogname)
-    
-
+    print('Read Init-files')
+    tic = time.time()
+    part0, catalog, params, outnames = getInitfiles(mainDir, year, month, dn, useDardar)
+    print('It took %d sec to read Init-files' %(time.time() - tic))
     #: Read the index file that contains the initial positions
-    part0 = readidx107(os.path.join(trajDir,'part_000'),quiet=False)
     # print('numpart',part0['numpart'])
     #:
     
+    lons_0 = part0['x']#np.where(part0['x'] > 180, part0['x'] - 360, part0['x'])
+    lats_0 = part0['y']
     
-    fname = os.path.join(outDir, outname + '.h5')
-    rvs, fls, age, lons, lats, temp, pres = readConvFile(fname)
+    print('Read Conv-files')
+    tic = time.time()
+    rvs, fls, age, lons, lats, temp, pres = getConvfiles(outDir, outnames)
+    print('It took %d sec to read Conv-files' %(time.time() - tic))
     
-    catalog = readCatalogFile(catalFile, part0)
     # print(time.time() - tic)
-    old = (fls & I_OLD) == I_OLD
+    olds = (fls & I_OLD) == I_OLD
     hits = (fls & I_HIT) == I_HIT
-
+    
     lons = checkLons(lons, hits)
     # originDate, idxDates = getDates(part0, hits)
     cloudy = (catalog['CM'] > 0)
     hits_cld = hits & cloudy
     hits_clr = hits & ~cloudy
+    
+    olds_cld = olds & cloudy
+    olds_clr = olds & ~cloudy
+    
+    # step = 10
+    # latarr = np.asarray(range(-90, 90, step))
+    # lonarr = np.asarray(range(-180, 180, step))
+    #
+    # hitarr = np.zeros([latarr.shape[0], lonarr.shape[0]])
+    # oldarr = np.zeros([latarr.shape[0], lonarr.shape[0]])
+    # tic = time.time()
+    # for i in range(latarr.shape[0]):
+    #     latind = ((lats >= latarr[i]) & (lats < (latarr[i] + step)))
+    #     for j in range(lonarr.shape[0]):
+    #         lonind = ((lons >= lonarr[j]) & (lons < (lonarr[j] + step)))
+    #         hitarr[i, j] = (latind & lonind & hits).sum()
+    #         oldarr[i, j] = (latind & lonind & olds).sum()
+    # toc = time.time()
+    # print(toc-tic)
     if compare:
+        outname = outnames[0]
         outDirCP = '%s/flexout/STC/Calipso-OUT/Coldpoint' %datPath
         outDirOrg = '%s/flexout/STC/Calipso-OUT/Org' %datPath
         coutname = outname.replace('-DD', '')
@@ -221,11 +369,18 @@ if __name__ == '__main__':
         lons3 = checkLons(lons3, hits3)
         lons4 = checkLons(lons4, hits4)
     
+    #: https://stackoverflow.com/questions/50611018/cartopy-heatmap-over-openstreetmap-background/50638691
+
+    print('Plot')
     #: --- Plot ---
     fig = plt.figure()
     fig.suptitle('Age histogram')
     ax = fig.add_subplot(1,1,1)
-    ax.hist(age[hits] / 86400, bins=400)#, density=True)
+    
+    h = ax.hist(age[hits] / 86400, bins=400)#, density=True)
+    # h = ax.hist(age[hits] / 86400, bins=np.logspace(np.log10(0.001),np.log10(42.0), 400))#bins=400)#, density=True)
+    # ax.set_xscale('log')
+    # fig.gca().set_xscale("log")
     ax.set_xlabel('Age [days]')
     ax.set_title('Hits pixels')
     ax.text(0.7, 0.9,'total = %d' %hits.sum(),
@@ -235,6 +390,7 @@ if __name__ == '__main__':
     plt.tight_layout()
     figname = '%s/hist_age_all' %plotDir
     fig.savefig(figname + '.png')
+    # pdb.set_trace()
     
     #: --- Plot ---
     fig = plt.figure()
@@ -264,8 +420,198 @@ if __name__ == '__main__':
     plt.tight_layout()
     figname = '%s/hist_age_clr' %plotDir
     fig.savefig(figname + '.png')
- 
+
+    #: --- Plot ---
+    if False:
+        tic = time.time()
+        fig = plt.figure()
+        ax = fig.add_subplot(111,projection=ccrs.PlateCarree())
+        ax.set_extent([-180, 190, -90, 90], crs=ccrs.PlateCarree())
+        ax.coastlines()
+        # [0::500]
+        step = int(lons[hits].shape[0]/250)
+        plt.plot([lons[hits][0::step], lons_0[hits][0::step]], [lats[hits][0::step], lats_0[hits][0::step]],
+             linewidth=1, transform=ccrs.Geodetic())
+        plt.tight_layout()
+        fig.savefig('%s/traj.png' %plotDir)
+        toc = time.time()
+        print(toc-tic)
+    
+    
+    #: --- Plot ---
+    # from matplotlib import ticker
+    
+    
+    hh1, xedges1, yedges1 = np.histogram2d(lons[hits], lats[hits], bins=[180, 90])
+    hh2, xedges2, yedges2 = np.histogram2d(lons_0[hits], lats_0[hits], bins=[180, 90])#, bins=400)#, density=True)
+    hhim1 = conv2DHistToImage(hh1, xedges1, yedges1)
+    hhim2 = conv2DHistToImage(hh2, xedges2, yedges2)
+
+    fig = plt.figure()
+    fig.suptitle('2D Hist - Hits pixels')
+    ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
+    ax.set_extent([-180, 180, -60, 60], crs=ccrs.PlateCarree())
+    ax.coastlines()
+    im1 = ax.imshow(hhim1.T, origin ='lower', extent = [-180, 180, -60, 60])#, vmin=vmin, vmax=vmax)
+    ax.set_title('Trazilla')
+    fig.subplots_adjust(right=0.89)
+    cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
+    cbar = fig.colorbar(im1, cbar_ax)
+    ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
+    ax.set_extent([-180, 190, -60, 60], crs=ccrs.PlateCarree())
+    ax.coastlines()
+    im2 = ax.imshow(hhim2.T, origin ='lower', extent = [-180, 180, -60, 60])#, vmin=vmin, vmax=vmax)
+    ax.set_title('Dardar')
+    fig.subplots_adjust(right=0.89)
+    cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
+    cbar = fig.colorbar(im2, cax=cbar_ax)
+    # plt.tight_layout()
+    figname = '%s/2dhist_hits_all' %plotDir
+    fig.savefig(figname + '.png')
+    
+#     fig = plt.figure()
+#     fig.suptitle('2D Hist - Hits pixels')
+#     ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
+#     ax.set_extent([-180, 180, -60, 60], crs=ccrs.PlateCarree())
+#     ax.coastlines()
+#     # ax.gridlines(draw_labels=True)
+#     # gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True, x_inline=False, y_inline=False, linewidth=2.001, color='k',alpha=0)
+#     # gl.right_labels = gl.top_labels = False
+#     # gl.ylocator = ticker.FixedLocator([60, -30, 0, 30, 60])
+#     # gl.xlocator = ticker.FixedLocator([-180, -90, 0, 90, 180])
+#     # do coordinate conversion of (x,y)
+#     # xynps = ax.projection.transform_points(ccrs.Geodetic(), x, y)
+#     # im1 = ax.imshow(hh1, vmin=vmin, vmax=vmax)
+#     hh = ax.hist2d(lons[hits], lats[hits], bins=[180, 90])#, bins=400)#, density=True)
+#     fig.subplots_adjust(right=0.9)
+#     # cbar_ax = fig.add_axes([0.91, 0.54, 0.008, 0.24])
+#     # fig.colorbar(hh[3], cax=cbar_ax)#, orientation='horizontal')
+#     # import matplotlib as mpl
+#     # cb1 = mpl.colorbar.ColorbarBase(ax, orientation='horizontal')
+#     ax.set_xlabel('Longitude')
+#     ax.set_ylabel('Latitude')
+#     ax.set_title('Trazilla')
+#     ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
+#     ax.set_extent([-180, 190, -60, 60], crs=ccrs.PlateCarree())
+#     ax.coastlines()
+#     # im2 = ax.imshow(hh2, vmin=vmin, vmax=vmax, extent = [-180, 180, -60, 60])
+#     hh = ax.hist2d(lons_0[hits], lats_0[hits], bins=[180, 90])#, bins=400)#, density=True)
+#     # cbar_ax = fig.add_axes([pos_x, axpos.y0, 0.01, axpos.height])
+#     # cbar = fig.colorbar(im, orientation='vertical', cax=cbar_ax, ticks=barticks)  # @UnusedVariable
+# #   cbar=fig.colorbar(im)#, cax=pos_cax)
+#     # cbar.ax.tick_params(labelsize=fs)
+#     # divider = make_axes_locatable(ax)
+#     # cax = divider.append_axes("right", size="5%", pad=0.05)
+#     fig.subplots_adjust(right=0.9)
+#     # cbar_ax = fig.add_axes([0.91, 0.04, 0.008, 0.24])
+#     # cbar = fig.colorbar(hh[3], cax=cbar_ax)#, orientation='horizontal')
+#     ax.set_xlabel('Longitude')
+#     ax.set_ylabel('Latitude')
+#     ax.set_title('Dardar')
+#
+#     # plt.tight_layout()
+#     fig.savefig('%s/2dhist_hits_all.png' %plotDir)
+#
+
+    
+    
+    fig = plt.figure()
+    fig.suptitle('2D Hist - Hits and Cloudy pixels')
+    ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
+    ax.set_extent([-180, 180, -60, 60], crs=ccrs.PlateCarree())
+    ax.coastlines()
+    ax.hist2d(lons[hits_cld], lats[hits_cld], bins=[180, 90])#, bins=400)#, density=True)
+    ax.set_xlabel('Longitude')
+    ax.set_ylabel('Latitude')
+    ax.set_title('Trazilla')
+    ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
+    ax.set_extent([-180, 190, -60, 60], crs=ccrs.PlateCarree())
+    ax.coastlines()
+    ax.hist2d(lons_0[hits_cld], lats_0[hits_cld], bins=[180, 90])#, bins=400)#, density=True)
+    ax.set_xlabel('Longitude')
+    ax.set_ylabel('Latitude')
+    ax.set_title('Dardar')
+    plt.tight_layout()
+    fig.savefig('%s/2dhist_hits_cld.png' %plotDir)
+    
+    
+    fig = plt.figure()
+    fig.suptitle('2D Hist - Hits and Clear pixels')
+    ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
+    ax.set_extent([-180, 190, -60, 60], crs=ccrs.PlateCarree())
+    ax.coastlines()
+    ax.hist2d(lons[hits_clr], lats[hits_clr], bins=[180, 90])#, bins=400)#, density=True)
+    ax.set_xlabel('Longitude')
+    ax.set_ylabel('Latitude')
+    ax.set_title('Trazilla')
+    ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
+    ax.set_extent([-180, 190, -60, 60], crs=ccrs.PlateCarree())
+    ax.coastlines()
+    ax.hist2d(lons_0[hits_clr], lats_0[hits_clr], bins=[180, 90])#, bins=400)#, density=True)
+    ax.set_xlabel('Longitude')
+    ax.set_ylabel('Latitude')
+    ax.set_title('Dardar')
+    plt.tight_layout()
+    fig.savefig('%s/2dhist_hits_clr.png' %plotDir)
+    
     pdb.set_trace()
+    #: --- Plot ---
+    fig = plt.figure()
+    ax = fig.add_subplot(1,1,1)
+    ax.hist2d(lons[olds], lats[olds], bins=[180, 90])#, bins=400)#, density=True)
+    ax.set_xlabel('Longitude')
+    ax.set_ylabel('Latitude')
+    ax.set_title('Old pixels')
+    plt.tight_layout()
+    fig.savefig('%s/2dhist_olds_all.png' %plotDir)
+    
+    fig = plt.figure()
+    ax = fig.add_subplot(1,1,1)
+    ax.hist2d(lons[olds_cld], lats[olds_cld], bins=[180, 90])#, bins=400)#, density=True)
+    ax.set_xlabel('Longitude')
+    ax.set_ylabel('Latitude')
+    ax.set_title('Old and Cloudy pixels')
+    plt.tight_layout()
+    fig.savefig('%s/2dhist_olds_cld.png' %plotDir)
+    
+    fig = plt.figure()
+    ax = fig.add_subplot(1,1,1)
+    ax.hist2d(lons[olds_clr], lats[olds_clr], bins=[180, 90])#, bins=400)#, density=True)
+    ax.set_xlabel('Longitude')
+    ax.set_ylabel('Latitude')
+    ax.set_title('Old and Clear pixels')
+    plt.tight_layout()
+    fig.savefig('%s/2dhist_olds_clr.png' %plotDir)
+    
+    #: --- Plot ---
+    fig = plt.figure()
+    ax = fig.add_subplot(1,1,1)
+    ax.hist2d(lons_0[hits], lats_0[hits], bins=[180, 90])#, bins=400)#, density=True)
+    ax.set_xlabel('Longitude')
+    ax.set_ylabel('Latitude')
+    ax.set_title('Hits pixels')
+    plt.tight_layout()
+    fig.savefig('%s/temp.png' %plotDir)
+    
+    
+    #: rsv
+    rvsH = rvs.copy()
+    rvsH = np.where(hits, 1.6 * magic, np.nan)
+    
+    
+    
+    
+    pdb.set_trace()
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     #: --- Plot ---
     
     if compare:
