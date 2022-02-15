@@ -39,8 +39,91 @@ I_STOP = I_HIT + I_DEAD
 
 magic = 0.84
 
+#:----------------------------------------------------
+
+
+def getYmax(y1, y2):
+    ym = np.max((y1, y2))
+    if ym > 60:
+        ym = 90
+    else:
+        ym = 60
+    return ym
+
 
 #:----------------------------------------------------
+def compareFiles(f1, f1n, f2, f2n, ft=0):
+    #: 0 => Both files Catalog
+    #: 1 => f1 = Catalog, f2 = parad
+    f1l = 0
+    f2l = 0
+    f12l = 0
+    for d in f1.keys():
+        for o in f1[d].keys():
+            for an in f1[d][o].keys():
+                
+                # try:
+                #     isinstance(f1[d][o][an][0], (datetime.datetime))
+                # except:
+                #     pdb.set_trace()
+                if isinstance(f1[d][o][an], (int)):
+                    if not (f1[d][o][an] == f2[d][o][an]):
+                        print('not same int content')
+                        pdb.set_trace()
+                    continue
+                if isinstance(f1[d][o][an][0], (datetime.datetime)):
+                    f1isnan = np.zeros(np.asarray(f1[d][o][an]).shape).astype(bool)
+                    f2isnan = np.zeros(np.asarray(f2[d][o][an]).shape).astype(bool)
+                else:
+                    f1isnan = np.isnan(f1[d][o][an])
+                    f2isnan = np.isnan(f2[d][o][an])
+                if not f1isnan.shape == f2isnan.shape:
+                    print('wrong nan shape')
+                    pdb.set_trace()
+                if not (np.asarray(f1[d][o][an])[~f1isnan] == np.asarray(f2[d][o][an])[~f2isnan]).all():
+                    print('not same content')
+                    pdb.set_trace()
+    
+            if len(f1[d][o].keys()) == len(f2[d][o].keys()):
+                f12l = f12l + 1
+            elif len(f1[d][o].keys()) > len(f2[d][o].keys()):
+                f1l = f1l + 1
+            elif len(f1[d][o].keys()) < len(f2[d][o].keys()):
+                f2l = f2l + 1
+    
+                
+                
+    #: TODO: Kolla
+    # datetime.datetime(2008, 10, 1, 0, 0)
+    print("")
+    print("All data in f1 exist (and are the same) in f2 ")
+    if (f12l > 0) and (f1l == 0) and (f2l == 0):
+        print('f1 and f2 contains same amount of data')
+    elif (f12l == 0) and (f1l > 0) and (f2l == 0):
+        print('f1 contains more data')
+    elif (f12l == 0) and (f1l == 0) and (f2l > 0):    
+        print('f2 contains more data')
+    else:
+        print('f1 and f2 contains defferent length of data')
+        print('f12l = %d' %f12l)
+        print('f1l = %d' %f1l)
+        print('f2l = %d' %f2l)
+        pdb.set_trace()
+    
+    print("f1 was created: %s" %time.ctime(os.path.getctime(f1n)))
+    print("f2 was created: %s" %time.ctime(os.path.getctime(f2n)))
+    if os.path.getctime(f1n) == os.path.getctime(f2n):
+        print("Files created at the same time")
+    if os.path.getctime(f1n) > os.path.getctime(f2n):
+        print("f1 is newer")
+    if os.path.getctime(f1n) < os.path.getctime(f2n):
+        print("f2 is newer")
+    print("Delete one file")
+    print("")
+    print("f1 = %s" %f1n)
+    print("f2 = %s" %f2n)
+    sys.exit()
+
 
 def readParamFile(fn):
     objects = []
@@ -78,44 +161,15 @@ def readParamFile(fn):
     return retv
 
 
-#:----------------------------------------------------
-
-def readCatalogFile(fn, p0=None):
-    objects = []
+def readCatalogFile(fn):
+    retv = []
     with (gzip.open(fn, "rb")) as openfile:
         while True:
             try:
-                objects.append(pickle.load(openfile))
+                retv.append(pickle.load(openfile))
             except EOFError:
                 break
-    if p0 is not None:
-        retv = {'CM': np.zeros(p0['numpart']), 'TpH': np.zeros(p0['numpart']), \
-                'SZA': np.zeros(p0['numpart']), 'SC': np.zeros(p0['numpart']), \
-                'lensel': np.zeros(p0['numpart']), 'npart': np.zeros(p0['numpart'])}
-        temp = objects[0]
-        sp = 0
-        for da in temp.keys():
-            for orbit in temp[da].keys():
-                ep = sp + temp[da][orbit]['npart']
-                retv['CM'][sp:ep] = temp[da][orbit]['Cloud_Mask']
-                retv['TpH'][sp:ep] = temp[da][orbit]['Tropopause_Height']
-                retv['SZA'][sp:ep] = temp[da][orbit]['SZA']
-                retv['SC'][sp:ep] = temp[da][orbit]['Simplified_Categorization']
-                retv['lensel'][sp:ep] = np.repeat(temp[da][orbit]['lensel'], (ep-sp))
-                retv['npart'][sp:ep] = np.repeat(temp[da][orbit]['npart'], (ep-sp))
-                #: Test to make sure the param korrespond to the part0
-                if not temp[da][orbit]['longitudes'][0] == p0['x'][sp]:
-                    print('Lon 0 test')
-                    pdb.set_trace()
-                #: Not sure why -1
-                if not temp[da][orbit]['longitudes'][1] == p0['x'][ep-1]:
-                    print('Lon 1 test')
-                    pdb.set_trace()
-                # pdb.set_trace()
-                sp = ep
-    else:
-        retv = objects[0]
-    return retv
+    return retv[0]
 
 
 def readConvFile(fn, usefk=False):
@@ -148,6 +202,76 @@ def readConvFile(fn, usefk=False):
     return rvs, fls, age, lons, lats, temp, pres
 
 
+def getCatalogFile(fn, p0=None):
+    tf = '/data/ejohansson/flexout/STC/Calipso/CALIOP-EAD/Catalog/%s' %os.path.basename(fn)
+    
+    objects = readCatalogFile(fn)
+    if os.path.isfile(tf):
+        to = readCatalogFile(tf)
+        compareFiles(objects, fn, to, tf, 0)
+    
+    nameDic = {'CM': 'Cloud_Mask', 'TpH': 'Tropopause_Height', \
+                'SZA': 'SZA', 'SC': 'Simplified_Categorization', \
+                'lensel': 'lensel', 'npart': 'npart', 'vod': 'vis_optical_depth', \
+                'height': 'Track_Height'}
+    retv = {}
+    for rn in nameDic.keys():
+        retv.update({rn: np.array([])})
+    sp = 0
+    for da in objects.keys():
+        for orbit in objects[da].keys():
+            ep = sp + objects[da][orbit]['npart']
+            if p0 is not None:
+                #: Test to make sure the param korrespond to the part0
+                if not objects[da][orbit]['longitudes'][0] == p0['x'][sp]:
+                    print('Lon 0 test')
+                    pdb.set_trace()
+                #: Not sure why -1
+                if not objects[da][orbit]['longitudes'][1] == p0['x'][ep-1]:
+                    print('Lon 1 test')
+                    pdb.set_trace()
+            
+            
+            for retvn in retv.keys():
+                if retvn in ['lensel', 'npart']:
+                    retv[retvn] = np.concatenate((retv[retvn], np.repeat(objects[da][orbit][nameDic[retvn]], (ep-sp))))
+                else:
+                    retv[retvn] = np.concatenate((retv[retvn], objects[da][orbit][nameDic[retvn]]))
+
+            sp = ep
+    
+    
+    # if p0 is not None:
+    #     retv = {'CM': np.zeros(p0['numpart']), 'TpH': np.zeros(p0['numpart']), \
+    #             'SZA': np.zeros(p0['numpart']), 'SC': np.zeros(p0['numpart']), \
+    #             'lensel': np.zeros(p0['numpart']), 'npart': np.zeros(p0['numpart'])}
+    # objects
+    # sp = 0
+    # for da in objects.keys():
+    #     for orbit in objects[da].keys():
+    #         ep = sp + objects[da][orbit]['npart']
+    #         retv['CM'][sp:ep] = objects[da][orbit]['Cloud_Mask']
+    #         retv['TpH'][sp:ep] = objects[da][orbit]['Tropopause_Height']
+    #         retv['SZA'][sp:ep] = objects[da][orbit]['SZA']
+    #         retv['SC'][sp:ep] = objects[da][orbit]['Simplified_Categorization']
+    #         retv['lensel'][sp:ep] = np.repeat(objects[da][orbit]['lensel'], (ep-sp))
+    #         retv['npart'][sp:ep] = np.repeat(objects[da][orbit]['npart'], (ep-sp))
+    #         #: Test to make sure the param korrespond to the part0
+    #         if not objects[da][orbit]['longitudes'][0] == p0['x'][sp]:
+    #             print('Lon 0 test')
+    #             pdb.set_trace()
+    #         #: Not sure why -1
+    #         if not objects[da][orbit]['longitudes'][1] == p0['x'][ep-1]:
+    #             print('Lon 1 test')
+    #             pdb.set_trace()
+    #         # pdb.set_trace()
+    #         sp = ep
+    # else:
+    #     retv = objects
+    
+    return retv
+
+
 def getInitfiles(mD, years, months, dn, uD):
     if (not isinstance(years, list)) or (not isinstance(months, list)):
         print('Wrong type')
@@ -170,7 +294,7 @@ def getInitfiles(mD, years, months, dn, uD):
             paramFile = os.path.join(initDir, paramname)
             catalFile = os.path.join(initDir, catalogname)
             pf = readidx107(os.path.join(trajDir,'part_000'),quiet=False)
-            cf = readCatalogFile(catalFile, pf)
+            cf = getCatalogFile(catalFile, pf)
             mf = readParamFile(paramFile)
             pf['x'] = np.where(pf['x'] > 180, pf['x'] - 360, pf['x'])
             if i == 0:
@@ -228,6 +352,12 @@ def getConvfiles(oD, onames):
     return retvRvs, retvFls, retvAge, retvLons, retvLats, retvTemp, retvPres
 
 
+def normalizeLons(lon, lat):
+    print('Normalize Longitudes')
+    retv = lon * np.cos(np.deg2rad(lat))
+    return retv
+
+
 def checkLons(lon, hit = None):
     """
     Make sure longitudes are in range
@@ -273,14 +403,22 @@ def getDates(parf, inds=None):
     return originDate, idxDates
 
 
-def conv2DHistToImage(h, x, y):
+def conv2DHistToImage(h, x, y, yb=60):
     xstep = x[3] - x[2]  # @UnusedVariable
     ystep = y[3] - y[2]
-    yim = np.arange(-60, 60, ystep)
+    yim = np.arange(-1*yb, yb, ystep)
     yargmin = np.argmin(np.abs(yim - y[0]))
     yargmax = np.argmin(np.abs(yim - y[-1]))
-    him = np.zeros([h.shape[0], yim.shape[0]])
-    him[:, yargmin: yargmax] = h
+    if (y[0] < -179) and (yim.shape[0] > h.shape[1]):
+        use_yshape = h.shape[1]
+        # yargmax = use_yshape
+    else:
+        use_yshape = yim.shape[0]
+    try:
+        him = np.zeros([h.shape[0], use_yshape])
+        him[:, yargmin: yargmax] = h
+    except:
+        pdb.set_trace()
     return him
 
 
@@ -298,7 +436,8 @@ if __name__ == '__main__':
     
     compare = False
     year = [2008]
-    month = [1]#[*range(1, 13)]#[1]
+    month = [1]
+    #month = [*range(1, 13)]
     dn = 'n'
     useDardar = True
     
@@ -328,14 +467,23 @@ if __name__ == '__main__':
     hits = (fls & I_HIT) == I_HIT
     
     lons = checkLons(lons, hits)
+    
+    if False:
+        lons = normalizeLons(lons, lats)
+        lons_0 = normalizeLons(lons_0, lats_0)
     # originDate, idxDates = getDates(part0, hits)
-    cloudy = (catalog['CM'] > 0)
+    # cloudy = (catalog['CM'] > 0)
+    # cloudy = ((catalog['SC']>0) & (catalog['SC']<5))
+    cloudy = (catalog['vod'] > 0)
+    cloudy_thin = cloudy & (catalog['vod'] < 0.03)
     hits_cld = hits & cloudy
     hits_clr = hits & ~cloudy
+    hits_cldt = hits & cloudy_thin
+    
     
     olds_cld = olds & cloudy
     olds_clr = olds & ~cloudy
-    
+    olds_cldt = olds & cloudy_thin
     # step = 10
     # latarr = np.asarray(range(-90, 90, step))
     # lonarr = np.asarray(range(-180, 180, step))
@@ -370,38 +518,58 @@ if __name__ == '__main__':
         lons4 = checkLons(lons4, hits4)
     
     #: https://stackoverflow.com/questions/50611018/cartopy-heatmap-over-openstreetmap-background/50638691
-
     print('Plot')
-    #: --- Plot ---
-    fig = plt.figure()
-    fig.suptitle('Age histogram')
-    ax = fig.add_subplot(1,1,1)
-    
-    h = ax.hist(age[hits] / 86400, bins=400)#, density=True)
-    # h = ax.hist(age[hits] / 86400, bins=np.logspace(np.log10(0.001),np.log10(42.0), 400))#bins=400)#, density=True)
-    # ax.set_xscale('log')
-    # fig.gca().set_xscale("log")
-    ax.set_xlabel('Age [days]')
-    ax.set_title('Hits pixels')
-    ax.text(0.7, 0.9,'total = %d' %hits.sum(),
-            horizontalalignment='center',
-            verticalalignment='center',
-            transform = ax.transAxes)
-    plt.tight_layout()
-    figname = '%s/hist_age_all' %plotDir
-    fig.savefig(figname + '.png')
+    heightBoundaries = [[None, None], [14,16], [16, 18], [18,20]]
+    title_use = 'Hits pixels'
+    for h1, h2 in heightBoundaries:
+        if h1 is None:
+            continue
+        pdb.set_trace()
+        if (h1 is None) and (h2 is None):
+            ind_use = hits
+        elif h2 == heightBoundaries[-1][1]:
+            ind_use = hits & (catalog['height'] >= h1) & (catalog['height'] <= h2)
+        else:
+            ind_use = hits & (catalog['height'] >= h1) & (catalog['height'] < h2)
+        
+        
+        #: --- Plot ---
+        fig = plt.figure()
+        ax = fig.add_subplot(2,1,1)
+        # fig.suptitle('Age histogram')
+        h = ax.hist(age[ind_use] / 86400, bins=400)#, density=True)
+        # h = ax.hist(age[hits] / 86400, bins=np.logspace(np.log10(0.001),np.log10(42.0), 400))#bins=400)#, density=True)
+        # ax.set_xscale('log')
+        # fig.gca().set_xscale("log")
+        # ax.set_xlabel('Age [days]')
+        ax.set_title('Hits pixels')
+        ax.text(0.7, 0.9,'total = %d' %ind_use.sum(),
+                horizontalalignment='center',
+                verticalalignment='center',
+                transform = ax.transAxes)
+        ax = fig.add_subplot(2,1,2)
+        h = ax.hist(age[ind_use] / 86400, bins=400)#, density=True)
+        ax.set_yscale('log')
+        ax.set_xlabel('Age [days]')
+        # ax.set_title('Hits pixels')
+        plt.tight_layout()
+        figname = '%s/hist_age_all' %plotDir
+        fig.savefig(figname + '.png')
     # pdb.set_trace()
     
     #: --- Plot ---
     fig = plt.figure()
-    ax = fig.add_subplot(1,1,1)
+    ax = fig.add_subplot(2,1,1)
     ax.hist(age[hits_cld] / 86400, bins=400)#, density=True)
-    ax.set_xlabel('Age [days]')
     ax.set_title('Hits and Cloudy pixels')
     ax.text(0.7, 0.9,'total = %d' %hits_cld.sum(),
             horizontalalignment='center',
             verticalalignment='center',
             transform = ax.transAxes)
+    ax = fig.add_subplot(2,1,2)
+    ax.hist(age[hits_cld] / 86400, bins=400)#, density=True)
+    ax.set_yscale('log')
+    ax.set_xlabel('Age [days]')
     plt.tight_layout()
     figname = '%s/hist_age_cld' %plotDir
     fig.savefig(figname + '.png')
@@ -409,16 +577,36 @@ if __name__ == '__main__':
     #: --- Plot ---
     fig = plt.figure()
     # fig.suptitle('Age histogram')
-    ax = fig.add_subplot(1,1,1)
+    ax = fig.add_subplot(2,1,1)
     ax.hist(age[hits_clr] / 86400, bins=400)#, density=True)
-    ax.set_xlabel('Age [days]')
     ax.set_title('Hits and Clear pixels')
     ax.text(0.7, 0.9,'total = %d' %hits_clr.sum(),
             horizontalalignment='center',
             verticalalignment='center',
             transform = ax.transAxes)
+    ax = fig.add_subplot(2,1,2)
+    ax.hist(age[hits_clr] / 86400, bins=400)#, density=True)
+    ax.set_yscale('log')
+    ax.set_xlabel('Age [days]')
     plt.tight_layout()
     figname = '%s/hist_age_clr' %plotDir
+    fig.savefig(figname + '.png')
+    
+    #: --- Plot ---
+    fig = plt.figure()
+    ax = fig.add_subplot(2,1,1)
+    ax.hist(age[hits_cldt] / 86400, bins=400)#, density=True)
+    ax.set_title('Hits and Thin Cloudy pixels')
+    ax.text(0.7, 0.9,'total = %d' %hits_cldt.sum(),
+            horizontalalignment='center',
+            verticalalignment='center',
+            transform = ax.transAxes)
+    ax = fig.add_subplot(2,1,2)
+    ax.hist(age[hits_cldt] / 86400, bins=400)#, density=True)
+    ax.set_yscale('log')
+    ax.set_xlabel('Age [days]')
+    plt.tight_layout()
+    figname = '%s/hist_age_cld_thin' %plotDir
     fig.savefig(figname + '.png')
 
     #: --- Plot ---
@@ -437,38 +625,90 @@ if __name__ == '__main__':
         toc = time.time()
         print(toc-tic)
     
+    #: TODO: Height, cloudmask, 
     
     #: --- Plot ---
     # from matplotlib import ticker
-    
-    
-    hh1, xedges1, yedges1 = np.histogram2d(lons[hits], lats[hits], bins=[180, 90])
-    hh2, xedges2, yedges2 = np.histogram2d(lons_0[hits], lats_0[hits], bins=[180, 90])#, bins=400)#, density=True)
-    hhim1 = conv2DHistToImage(hh1, xedges1, yedges1)
-    hhim2 = conv2DHistToImage(hh2, xedges2, yedges2)
+    #: --- All pixels ---
 
+    hh1, xedges1, yedges1 = np.histogram2d(lons, lats, bins=[180, 90])
+    hh2, xedges2, yedges2 = np.histogram2d(lons_0, lats_0, bins=[180, 90])#, bins=400)#, density=True)
+    ymax = getYmax(yedges1, yedges2)
+    aspect = float('%.2f' %((1/3) / (ymax / 180.)))
+    # hhim1 = conv2DHistToImage(hh1, xedges1, yedges1, ymax)
+    # hhim2 = conv2DHistToImage(hh2, xedges2, yedges2, ymax)
+    
     fig = plt.figure()
-    fig.suptitle('2D Hist - Hits pixels')
+    fig.suptitle('2D Hist - All pixels')
     ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
-    ax.set_extent([-180, 180, -60, 60], crs=ccrs.PlateCarree())
+    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
     ax.coastlines()
-    im1 = ax.imshow(hhim1.T, origin ='lower', extent = [-180, 180, -60, 60])#, vmin=vmin, vmax=vmax)
+    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    ax.tick_params(axis=u'both', which=u'both',length=0)
+    im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])#, vmin=vmin, vmax=vmax)
     ax.set_title('Trazilla')
+    # gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True, x_inline=False, y_inline=False)#, linewidth=0.001, color='k',alpha=0)
+    # gl.right_labels = gl.top_labels = gl.bottom_labels = gl.ylines = gl.xlines = False
+    # gl.ylocator = ticker.FixedLocator([-1*ymax+1, -1*ymax//2, 0, ymax//2, ymax-1])
+    # glLS = '%d%s' %(ymax, gl.ylabel_artists[0].get_text()[2:])
+    # gl.ylabel_artists[0].set_text(glLS)
+    # gl.ylabel_artists[-2].set_text('%d%s' %(ymax, gl.ylabel_artists[-2].get_text()[2:]))
     fig.subplots_adjust(right=0.89)
     cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
     cbar = fig.colorbar(im1, cbar_ax)
     ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
-    ax.set_extent([-180, 190, -60, 60], crs=ccrs.PlateCarree())
+    ax.set_extent([-180, 190, -1*ymax, ymax], crs=ccrs.PlateCarree())
     ax.coastlines()
-    im2 = ax.imshow(hhim2.T, origin ='lower', extent = [-180, 180, -60, 60])#, vmin=vmin, vmax=vmax)
+    im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])#, vmin=vmin, vmax=vmax)
+    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    ax.tick_params(axis=u'both', which=u'both',length=0)
     ax.set_title('Dardar')
     fig.subplots_adjust(right=0.89)
     cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
     cbar = fig.colorbar(im2, cax=cbar_ax)
+    figname = '%s/2dhist_all' %plotDir
+    fig.savefig(figname + '.png')
+    
+    #: --- Hits pixels ---
+    hh1, xedges1, yedges1 = np.histogram2d(lons[hits], lats[hits], bins=[180, 90])
+    hh2, xedges2, yedges2 = np.histogram2d(lons_0[hits], lats_0[hits], bins=[180, 90])#, bins=400)#, density=True)
+    ymax = getYmax(yedges1, yedges2)
+    aspect = float('%.2f' %((1/3) / (ymax / 180.)))
+    # hhim1 = conv2DHistToImage(hh1, xedges1, yedges1, ymax)
+    # hhim2 = conv2DHistToImage(hh2, xedges2, yedges2, ymax)
+    fig = plt.figure()
+    fig.suptitle('2D Hist - Hits pixels')
+    ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
+    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+    ax.coastlines()
+    im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])#, vmin=vmin, vmax=vmax)
+    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    ax.tick_params(axis=u'both', which=u'both',length=0)
+    ax.set_title('Trazilla')
+    fig.subplots_adjust(right=0.89)
+    cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
+    cbar = fig.colorbar(im1, cbar_ax)
+    
+    ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
+    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+    ax.coastlines()
+    im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])#, vmin=vmin, vmax=vmax)
+    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    ax.tick_params(axis=u'both', which=u'both',length=0)
+    ax.set_title('Dardar')
+    fig.subplots_adjust(right=0.89)
+    # cbar_ax = fig.add_axes([0.90, 0.06, 0.01, 0.40])
+    cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
+    cbar = fig.colorbar(im2, cax=cbar_ax)
+    # fig.tight_layout(rect=[0, 0.03, 0.97, 0.97])
+    # fig.tight_layout(rect=[0, 0.03, 1, 0.95])
     # plt.tight_layout()
     figname = '%s/2dhist_hits_all' %plotDir
     fig.savefig(figname + '.png')
-    
 #     fig = plt.figure()
 #     fig.suptitle('2D Hist - Hits pixels')
 #     ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
@@ -513,76 +753,240 @@ if __name__ == '__main__':
 #     fig.savefig('%s/2dhist_hits_all.png' %plotDir)
 #
 
-    
-    
+    hh1, xedges1, yedges1 = np.histogram2d(lons[hits_cld], lats[hits_cld], bins=[180, 90])
+    hh2, xedges2, yedges2 = np.histogram2d(lons_0[hits_cld], lats_0[hits_cld], bins=[180, 90])#, bins=400)#, density=True)
+    ymax = getYmax(yedges1, yedges2)
+    aspect = float('%.2f' %((1/3) / (ymax / 180.)))
     fig = plt.figure()
     fig.suptitle('2D Hist - Hits and Cloudy pixels')
     ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
-    ax.set_extent([-180, 180, -60, 60], crs=ccrs.PlateCarree())
+    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
     ax.coastlines()
-    ax.hist2d(lons[hits_cld], lats[hits_cld], bins=[180, 90])#, bins=400)#, density=True)
-    ax.set_xlabel('Longitude')
-    ax.set_ylabel('Latitude')
+    im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])#, vmin=vmin, vmax=vmax)
+    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    ax.tick_params(axis=u'both', which=u'both',length=0)
     ax.set_title('Trazilla')
+    fig.subplots_adjust(right=0.89)
+    cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
+    cbar = fig.colorbar(im1, cbar_ax)
     ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
-    ax.set_extent([-180, 190, -60, 60], crs=ccrs.PlateCarree())
+    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
     ax.coastlines()
-    ax.hist2d(lons_0[hits_cld], lats_0[hits_cld], bins=[180, 90])#, bins=400)#, density=True)
-    ax.set_xlabel('Longitude')
-    ax.set_ylabel('Latitude')
+    im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])#, vmin=vmin, vmax=vmax)
+    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    ax.tick_params(axis=u'both', which=u'both',length=0)
     ax.set_title('Dardar')
-    plt.tight_layout()
-    fig.savefig('%s/2dhist_hits_cld.png' %plotDir)
+    fig.subplots_adjust(right=0.89)
+    cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
+    cbar = fig.colorbar(im2, cax=cbar_ax)
+    figname = '%s/2dhist_hits_cld' %plotDir
+    fig.savefig(figname + '.png')
     
-    
+    hh1, xedges1, yedges1 = np.histogram2d(lons[hits_clr], lats[hits_clr], bins=[180, 90])
+    hh2, xedges2, yedges2 = np.histogram2d(lons_0[hits_clr], lats_0[hits_clr], bins=[180, 90])#, bins=400)#, density=True)
+    ymax = getYmax(yedges1, yedges2)
+    aspect = float('%.2f' %((1/3) / (ymax / 180.)))
     fig = plt.figure()
     fig.suptitle('2D Hist - Hits and Clear pixels')
     ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
-    ax.set_extent([-180, 190, -60, 60], crs=ccrs.PlateCarree())
+    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
     ax.coastlines()
-    ax.hist2d(lons[hits_clr], lats[hits_clr], bins=[180, 90])#, bins=400)#, density=True)
-    ax.set_xlabel('Longitude')
-    ax.set_ylabel('Latitude')
+    im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])#, vmin=vmin, vmax=vmax)
+    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    ax.tick_params(axis=u'both', which=u'both',length=0)
     ax.set_title('Trazilla')
+    fig.subplots_adjust(right=0.89)
+    cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
+    cbar = fig.colorbar(im1, cbar_ax)
     ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
-    ax.set_extent([-180, 190, -60, 60], crs=ccrs.PlateCarree())
+    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
     ax.coastlines()
-    ax.hist2d(lons_0[hits_clr], lats_0[hits_clr], bins=[180, 90])#, bins=400)#, density=True)
-    ax.set_xlabel('Longitude')
-    ax.set_ylabel('Latitude')
+    im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])#, vmin=vmin, vmax=vmax)
+    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    ax.tick_params(axis=u'both', which=u'both',length=0)
     ax.set_title('Dardar')
-    plt.tight_layout()
-    fig.savefig('%s/2dhist_hits_clr.png' %plotDir)
+    fig.subplots_adjust(right=0.89)
+    cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
+    cbar = fig.colorbar(im2, cax=cbar_ax)
+    figname = '%s/2dhist_hits_clr' %plotDir
+    fig.savefig(figname + '.png')
+
+    hh1, xedges1, yedges1 = np.histogram2d(lons[hits_cldt], lats[hits_cldt], bins=[180, 90])
+    hh2, xedges2, yedges2 = np.histogram2d(lons_0[hits_cldt], lats_0[hits_cldt], bins=[180, 90])#, bins=400)#, density=True)
+    ymax = getYmax(yedges1, yedges2)
+    aspect = float('%.2f' %((1/3) / (ymax / 180.)))
+    fig = plt.figure()
+    fig.suptitle('2D Hist - Hits and Thin Cloudy pixels')
+    ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
+    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+    ax.coastlines()
+    im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])#, vmin=vmin, vmax=vmax)
+    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    ax.tick_params(axis=u'both', which=u'both',length=0)
+    ax.set_title('Trazilla')
+    fig.subplots_adjust(right=0.89)
+    cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
+    cbar = fig.colorbar(im1, cbar_ax)
+    ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
+    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+    ax.coastlines()
+    im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])#, vmin=vmin, vmax=vmax)
+    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    ax.tick_params(axis=u'both', which=u'both',length=0)
+    ax.set_title('Dardar')
+    fig.subplots_adjust(right=0.89)
+    cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
+    cbar = fig.colorbar(im2, cax=cbar_ax)
+    figname = '%s/2dhist_hits_cld_thin' %plotDir
+    fig.savefig(figname + '.png')
+    
     
     pdb.set_trace()
+    
     #: --- Plot ---
+    #: --- OLD Pixels ---
+    hh1, xedges1, yedges1 = np.histogram2d(lons[olds], lats[olds], bins=[180, 90])
+    hh2, xedges2, yedges2 = np.histogram2d(lons_0[olds], lats_0[olds], bins=[180, 90])#, bins=400)#, density=True)
+    ymax = getYmax(yedges1, yedges2)
+    aspect = float('%.2f' %((1/3) / (ymax / 180.)))
     fig = plt.figure()
-    ax = fig.add_subplot(1,1,1)
-    ax.hist2d(lons[olds], lats[olds], bins=[180, 90])#, bins=400)#, density=True)
-    ax.set_xlabel('Longitude')
-    ax.set_ylabel('Latitude')
-    ax.set_title('Old pixels')
-    plt.tight_layout()
-    fig.savefig('%s/2dhist_olds_all.png' %plotDir)
+    fig.suptitle('2D Hist - Old pixels')
+    ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
+    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+    ax.coastlines()
+    im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])#, vmin=vmin, vmax=vmax)
+    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    ax.tick_params(axis=u'both', which=u'both',length=0)
+    ax.set_title('Trazilla')
+    fig.subplots_adjust(right=0.89)
+    cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
+    cbar = fig.colorbar(im1, cbar_ax)
+    ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
+    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+    ax.coastlines()
+    im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])#, vmin=vmin, vmax=vmax)
+    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    ax.tick_params(axis=u'both', which=u'both',length=0)
+    ax.set_title('Dardar')
+    fig.subplots_adjust(right=0.89)
+    cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
+    cbar = fig.colorbar(im2, cax=cbar_ax)
+    figname = '%s/2dhist_olds_all' %plotDir
+    fig.savefig(figname + '.png')
     
+    hh1, xedges1, yedges1 = np.histogram2d(lons[olds_cld], lats[olds_cld], bins=[180, 90])
+    hh2, xedges2, yedges2 = np.histogram2d(lons_0[olds_cld], lats_0[olds_cld], bins=[180, 90])#, bins=400)#, density=True)
+    ymax = getYmax(yedges1, yedges2)
+    aspect = float('%.2f' %((1/3) / (ymax / 180.)))
     fig = plt.figure()
-    ax = fig.add_subplot(1,1,1)
-    ax.hist2d(lons[olds_cld], lats[olds_cld], bins=[180, 90])#, bins=400)#, density=True)
-    ax.set_xlabel('Longitude')
-    ax.set_ylabel('Latitude')
-    ax.set_title('Old and Cloudy pixels')
-    plt.tight_layout()
-    fig.savefig('%s/2dhist_olds_cld.png' %plotDir)
+    fig.suptitle('2D Hist - Old and Cloudy pixels')
+    ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
+    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+    ax.coastlines()
+    im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])#, vmin=vmin, vmax=vmax)
+    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    ax.tick_params(axis=u'both', which=u'both',length=0)
+    ax.set_title('Trazilla')
+    fig.subplots_adjust(right=0.89)
+    cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
+    cbar = fig.colorbar(im1, cbar_ax)
+    ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
+    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+    ax.coastlines()
+    im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])#, vmin=vmin, vmax=vmax)
+    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    ax.tick_params(axis=u'both', which=u'both',length=0)
+    ax.set_title('Dardar')
+    fig.subplots_adjust(right=0.89)
+    cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
+    cbar = fig.colorbar(im2, cax=cbar_ax)
+    figname = '%s/2dhist_olds_cld' %plotDir
+    fig.savefig(figname + '.png')
     
+    hh1, xedges1, yedges1 = np.histogram2d(lons[olds_clr], lats[olds_clr], bins=[180, 90])
+    hh2, xedges2, yedges2 = np.histogram2d(lons_0[olds_clr], lats_0[olds_clr], bins=[180, 90])#, bins=400)#, density=True)
+    ymax = getYmax(yedges1, yedges2)
+    aspect = float('%.2f' %((1/3) / (ymax / 180.)))
     fig = plt.figure()
-    ax = fig.add_subplot(1,1,1)
-    ax.hist2d(lons[olds_clr], lats[olds_clr], bins=[180, 90])#, bins=400)#, density=True)
-    ax.set_xlabel('Longitude')
-    ax.set_ylabel('Latitude')
-    ax.set_title('Old and Clear pixels')
-    plt.tight_layout()
-    fig.savefig('%s/2dhist_olds_clr.png' %plotDir)
+    fig.suptitle('2D Hist - Old and Clear pixels')
+    ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
+    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+    ax.coastlines()
+    im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])#, vmin=vmin, vmax=vmax)
+    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    ax.tick_params(axis=u'both', which=u'both',length=0)
+    ax.set_title('Trazilla')
+    fig.subplots_adjust(right=0.89)
+    cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
+    cbar = fig.colorbar(im1, cbar_ax)
+    ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
+    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+    ax.coastlines()
+    im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])#, vmin=vmin, vmax=vmax)
+    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    ax.tick_params(axis=u'both', which=u'both',length=0)
+    ax.set_title('Dardar')
+    fig.subplots_adjust(right=0.89)
+    cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
+    cbar = fig.colorbar(im2, cax=cbar_ax)
+    figname = '%s/2dhist_olds_clr' %plotDir
+    fig.savefig(figname + '.png')
     
+    hh1, xedges1, yedges1 = np.histogram2d(lons[olds_cldt], lats[olds_cldt], bins=[180, 90])
+    hh2, xedges2, yedges2 = np.histogram2d(lons_0[olds_cldt], lats_0[olds_cldt], bins=[180, 90])#, bins=400)#, density=True)
+    ymax = getYmax(yedges1, yedges2)
+    aspect = float('%.2f' %((1/3) / (ymax / 180.)))
+    fig = plt.figure()
+    fig.suptitle('2D Hist - Old and Thin Cloudy pixels')
+    ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
+    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+    ax.coastlines()
+    im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])#, vmin=vmin, vmax=vmax)
+    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    ax.tick_params(axis=u'both', which=u'both',length=0)
+    ax.set_title('Trazilla')
+    fig.subplots_adjust(right=0.89)
+    cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
+    cbar = fig.colorbar(im1, cbar_ax)
+    ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
+    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+    ax.coastlines()
+    im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])#, vmin=vmin, vmax=vmax)
+    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    ax.tick_params(axis=u'both', which=u'both',length=0)
+    ax.set_title('Dardar')
+    fig.subplots_adjust(right=0.89)
+    cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
+    cbar = fig.colorbar(im2, cax=cbar_ax)
+    figname = '%s/2dhist_olds_cld_thin' %plotDir
+    fig.savefig(figname + '.png')
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    sys.exit()    
     #: --- Plot ---
     fig = plt.figure()
     ax = fig.add_subplot(1,1,1)
