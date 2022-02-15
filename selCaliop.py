@@ -67,7 +67,6 @@ def createTime(tai):
 def readDARDAR(fname, dn):
     # open file
     ncf = netCDF4.Dataset(fname,'r')
-    
     if 'DARDAR-MASK' in fname:
         altx = ncf.variables['CS_TRACK_Height'][:].data
         # Reads latitudes and longitudes
@@ -92,10 +91,11 @@ def readDARDAR(fname, dn):
         sh = ncf.variables['Specific_humidity'][:].data
         msz = ncf.variables['MODIS_Solar_zenith'][:].data
         dsc = ncf.variables['DARMASK_Simplified_Categorization'][:].data
-        
+        # cmr = ncf.variables['CALIOP_Mask_Refined'][:].data
         extras = {'Cloud_Mask': clm, 'Land_Water_Mask': clv, 'Surface_Type': cst, \
                   'Tropopause_Height': th, 'Surface_pressure': sp, 'Skin_temperature': skt, \
-                  'Temperature_2m': t2, 'SST': sst, 'Specific_humidity': sh, 'SZA': msz, 'Simplified_Categorization': dsc}
+                  'Temperature_2m': t2, 'SST': sst, 'Specific_humidity': sh, 'SZA': msz, \
+                  'Simplified_Categorization': dsc}#, 'CALIOP_Mask_Refined': cmr}
         
         #: Day/night
         dn_var = ncf.variables['CALIOP_Day_Night_Flag'][:].data
@@ -107,6 +107,25 @@ def readDARDAR(fname, dn):
             dnf = ~(dn_var.astype(bool))
         else:
             dnf = np.ones(dn_var.shape).astype(bool)
+        #: Add Variables from DARDAR-Cloud 
+        #: Check for DARDAR - Cloud
+        ddf = fname.replace('/DARDAR-MASK.v2.23/', '/DARDAR-CLOUD.v3.10/').replace('/DARDAR-MASK_', '/DARDAR-CLOUD_').replace('_V2-23.nc', '_V3-10.nc') 
+        if os.path.isfile(ddf):
+            ddncf = netCDF4.Dataset(ddf,'r')
+            if not ((ddncf.variables['latitude'][:].data == lats).all() and \
+                    (ddncf.variables['DARMASK_Simplified_Categorization'][:].data == dsc).all() and \
+                    (ddncf.variables['time'][:].data == ncf.variables['CLOUDSAT_UTC_Time'][:].data).all()):
+                print('Something wrong with Dardar cloud')
+                sys.exit()
+            
+            ddvod = ddncf.variables['vis_optical_depth'][:].data
+            ddiwc = ddncf.variables['iwc'][:].data
+            ddncf.close()
+        else:
+            ddvod = np.zeros(lats.shape) + np.nan
+            ddiwc = np.zeros(dsc.shape) + np.nan
+        extras.update({'vis_optical_depth': ddvod, 'iwc': ddiwc})
+            
     else:
         altx = ncf.variables['height'][:].data
         print('check for unit. Needs to be km')
@@ -396,9 +415,10 @@ if __name__ == '__main__':
                 
             catalog[date][orbit] = {'longitudes':[lons[0],lons[-1]],
                                     'utc':[utc[0],utc[-1]],'selection':sel,'lensel':len(sel),
-                                    'npart':npart, 'Track_Height': altx,
-                                    'Cloud_Mask': extras['Cloud_Mask'], 'Tropopause_Height': extras['Tropopause_Height'], 
-                                    'SZA': extras['SZA'], 'Simplified_Categorization': extras['Simplified_Categorization']}
+                                    'npart':npart, 'Track_Height': altx}#,
+                                    # 'Cloud_Mask': extras['Cloud_Mask'], 'Tropopause_Height': extras['Tropopause_Height'], 
+                                    # 'SZA': extras['SZA'], 'Simplified_Categorization': extras['Simplified_Categorization']}
+            catalog[date][orbit].update(extras)
             print(date,orbit,len(sel),npart)
             # fill part0
             idx1 = numpart
