@@ -68,29 +68,29 @@ def readDARDAR(fname, dn):
     # open file
     ncf = netCDF4.Dataset(fname,'r')
     if 'DARDAR-MASK' in fname:
-        altx = ncf.variables['CS_TRACK_Height'][:].data
+        altx = ncf.variables['CS_TRACK_Height'][:].data #: 1D - yled
         # Reads latitudes and longitudes
-        lats = ncf.variables['CLOUDSAT_Latitude'][:].data
-        lons = ncf.variables['CLOUDSAT_Longitude'][:].data % 360
+        lats = ncf.variables['CLOUDSAT_Latitude'][:].data #: 1D
+        lons = ncf.variables['CLOUDSAT_Longitude'][:].data % 360 #: 1D
         # Read pressure (Pa), temperature (degree K)
-        pres = ncf.variables['Pressure'][:].data
-        temp = ncf.variables['Temperature'][:].data
+        pres = ncf.variables['Pressure'][:].data #: 2D
+        temp = ncf.variables['Temperature'][:].data #: 2D
         # Read time
-        tai = ncf.variables['CLOUDSAT_TAI_Time'][:].data
+        tai = ncf.variables['CLOUDSAT_TAI_Time'][:].data #: 1D
         utc, LSmask = createTime(tai)
         #: Extras
         #: Cloud Mask
-        clm = ncf.variables['CLOUDSAT_2B_GEOPROF_CPR_Cloud_Mask'][:].data
-        clv = ncf.variables['CALIOP_Land_Water_Mask'][:].data
-        cst = ncf.variables['CALIOP_IGBP_Surface_Type'][:].data
-        th = ncf.variables['Tropopause_Height'][:].data
-        sp = ncf.variables['Surface_pressure'][:].data
-        skt = ncf.variables['Skin_temperature'][:].data
-        t2 = ncf.variables['Temperature_2m'][:].data
-        sst = ncf.variables['Sea_surface_temperature'][:].data
-        sh = ncf.variables['Specific_humidity'][:].data
-        msz = ncf.variables['MODIS_Solar_zenith'][:].data
-        dsc = ncf.variables['DARMASK_Simplified_Categorization'][:].data
+        clm = ncf.variables['CLOUDSAT_2B_GEOPROF_CPR_Cloud_Mask'][:].data #: 2D
+        clv = ncf.variables['CALIOP_Land_Water_Mask'][:].data #: 1D
+        cst = ncf.variables['CALIOP_IGBP_Surface_Type'][:].data #: 1D
+        th = ncf.variables['Tropopause_Height'][:].data #: 1D
+        sp = ncf.variables['Surface_pressure'][:].data #: 1D
+        skt = ncf.variables['Skin_temperature'][:].data #: 1D
+        t2 = ncf.variables['Temperature_2m'][:].data #: 1D
+        sst = ncf.variables['Sea_surface_temperature'][:].data #: 1D
+        sh = ncf.variables['Specific_humidity'][:].data #: 2D
+        msz = ncf.variables['MODIS_Solar_zenith'][:].data #: 1D
+        dsc = ncf.variables['DARMASK_Simplified_Categorization'][:].data #: 2D
         # cmr = ncf.variables['CALIOP_Mask_Refined'][:].data
         extras = {'Cloud_Mask': clm, 'Land_Water_Mask': clv, 'Surface_Type': cst, \
                   'Tropopause_Height': th, 'Surface_pressure': sp, 'Skin_temperature': skt, \
@@ -118,14 +118,13 @@ def readDARDAR(fname, dn):
                 print('Something wrong with Dardar cloud')
                 sys.exit()
             
-            ddvod = ddncf.variables['vis_optical_depth'][:].data
-            ddiwc = ddncf.variables['iwc'][:].data
+            ddvod = ddncf.variables['vis_optical_depth'][:].data #: 1D
+            ddiwc = ddncf.variables['iwc'][:].data #: 2D
             ddncf.close()
         else:
             ddvod = np.zeros(lats.shape) + np.nan
             ddiwc = np.zeros(dsc.shape) + np.nan
         extras.update({'vis_optical_depth': ddvod, 'iwc': ddiwc})
-            
     else:
         altx = ncf.variables['height'][:].data
         print('check for unit. Needs to be km')
@@ -161,7 +160,6 @@ def readDARDAR(fname, dn):
             print('Wrong ndim')
             sys.exit()
         extras[arname] = val
-
 
     ncf.close()
     return altx, lats, lons, pres, temp, utc, extras
