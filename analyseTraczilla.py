@@ -783,55 +783,69 @@ if __name__ == '__main__':
     print('Plot 2D Histograms - Old')
     for ctyp in ['all', 'cld', 'cld_thin', 'clr']:
         if ctyp == 'all':
-            title = '2D Hist - Old pixels'
-            figname = '%s/2dhist_olds_all' %plotDir
-            inds = olds
+            title_org = '2D Hist - Old pixels'
+            figname_org = '%s/2dhist_olds_all' %plotDir
+            inds_org = olds
         elif ctyp == 'cld':
-            title = '2D Hist - Old and Cloudy pixels'
-            figname = '%s/2dhist_olds_cld' %plotDir
-            inds = olds_cld
+            title_org = '2D Hist - Old and Cloudy pixels'
+            figname_org = '%s/2dhist_olds_cld' %plotDir
+            inds_org = olds_cld
         elif ctyp == 'cld_thin':
-            title = '2D Hist - Old and Thin Cloudy pixels'
-            figname = '%s/2dhist_olds_cld_thin' %plotDir
-            inds = olds_cldt
+            title_org = '2D Hist - Old and Thin Cloudy pixels'
+            figname_org = '%s/2dhist_olds_cld_thin' %plotDir
+            inds_org = olds_cldt
         elif ctyp == 'clr':
-            title = '2D Hist - Old and Clear pixels'
-            figname = '%s/2dhist_olds_clr' %plotDir
-            inds = olds_clr
-        #: 2D Histogram
-        hh1, xedges1, yedges1 = np.histogram2d(lons[inds], lats[inds], bins=[180, 90])
-        hh2, xedges2, yedges2 = np.histogram2d(lons_0[inds], lats_0[inds], bins=[180, 90])
-        #: Latitude boundary
-        ymax = getYmax(yedges1, yedges2)
-        aspect = float('%.2f' %((1/3) / (ymax / 180.)))
-        fig = plt.figure()
-        fig.suptitle(title)
-        #: Subplot 1
-        ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
-        ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
-        ax.coastlines()
-        im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])
-        ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
-        ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
-        ax.tick_params(axis=u'both', which=u'both',length=0)
-        ax.set_title('Trazilla')
-        fig.subplots_adjust(right=0.89)
-        cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
-        cbar = fig.colorbar(im1, cbar_ax)
-        ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
-        ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
-        ax.coastlines()
-        im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])
-        ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
-        ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
-        ax.tick_params(axis=u'both', which=u'both',length=0)
-        ax.set_title('Dardar')
-        fig.subplots_adjust(right=0.89)
-        cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
-        cbar = fig.colorbar(im2, cax=cbar_ax)
-        # figname = '%s/2dhist_olds_all' %plotDir
-        fig.savefig(figname + '.png') 
-        plt.close(fig)
+            title_org = '2D Hist - Old and Clear pixels'
+            figname_org = '%s/2dhist_olds_clr' %plotDir
+            inds_org = olds_clr
+        #: Height
+        for h1, h2 in heightBoundaries:
+            if not ((h1 is None) and (h2 is None)):
+                title = title_org + ', %d - %d km' %(h1, h2)
+                figname = figname_org + '_%d-%d' %(h1, h2)
+                if h2 == heightBoundaries[-1][1]:
+                    inds_h = (catalog['height'] >= h1) & (catalog['height'] <= h2)
+                else:
+                    inds_h = (catalog['height'] >= h1) & (catalog['height'] < h2)
+                inds = inds_org & inds_h
+            else:
+                title = title_org
+                figname = figname_org
+                inds = inds_org
+            #: 2D Histogram
+            hh1, xedges1, yedges1 = np.histogram2d(lons[inds], lats[inds], bins=[180, 90])
+            hh2, xedges2, yedges2 = np.histogram2d(lons_0[inds], lats_0[inds], bins=[180, 90])
+            #: Latitude boundary
+            ymax = getYmax(yedges1, yedges2)
+            aspect = float('%.2f' %((1/3) / (ymax / 180.)))
+            fig = plt.figure()
+            fig.suptitle(title)
+            #: Subplot 1
+            ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
+            ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+            ax.coastlines()
+            im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])
+            ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+            ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+            ax.tick_params(axis=u'both', which=u'both',length=0)
+            ax.set_title('Trazilla')
+            fig.subplots_adjust(right=0.89)
+            cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
+            cbar = fig.colorbar(im1, cbar_ax)
+            ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
+            ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+            ax.coastlines()
+            im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])
+            ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+            ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+            ax.tick_params(axis=u'both', which=u'both',length=0)
+            ax.set_title('Dardar')
+            fig.subplots_adjust(right=0.89)
+            cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
+            cbar = fig.colorbar(im2, cax=cbar_ax)
+            # figname = '%s/2dhist_olds_all' %plotDir
+            fig.savefig(figname + '.png') 
+            plt.close(fig)
     pdb.set_trace()
     
 #     hh1, xedges1, yedges1 = np.histogram2d(lons[hits], lats[hits], bins=[180, 90])
