@@ -532,8 +532,8 @@ if __name__ == '__main__':
         lons4 = checkLons(lons4, hits4)
     
     #: https://stackoverflow.com/questions/50611018/cartopy-heatmap-over-openstreetmap-background/50638691
-    print('Plot')
     heightBoundaries = [[None, None], [14,16], [16, 18], [18,20]]
+    print('Plot Age Histograms')
     for ctyp in ['all', 'cld', 'cld_thin', 'clr']:
         if ctyp == 'all':
             title = 'Hits pixels'
@@ -584,6 +584,7 @@ if __name__ == '__main__':
             # ax.set_title('Hits pixels')
             plt.tight_layout()
             fig.savefig(figname_use + '.png')
+            plt.close(fig)
     # pdb.set_trace()
 
     # #: --- Plot ---
@@ -704,7 +705,9 @@ if __name__ == '__main__':
     figname = '%s/2dhist_all' %plotDir
     fig.savefig(figname + '.png')
     
+    #: --- Plot ---
     #: --- Hits pixels ---
+    print('Plot 2D Histograms - Hits')
     for ctyp in ['all', 'cld', 'cld_thin', 'clr']:
         if ctyp == 'all':
             title = '2D Hist - Hits pixels'
@@ -719,7 +722,7 @@ if __name__ == '__main__':
             figname = '%s/2dhist_hits_cld_thin' %plotDir
             inds = hits_cldt
         elif ctyp == 'clr':
-            title = '2D Hist - Hits pixels Clear pixels'
+            title = '2D Hist - Hits and Clear pixels'
             figname = '%s/2dhist_hits_clr' %plotDir
             inds = hits_clr
         
@@ -756,10 +759,65 @@ if __name__ == '__main__':
         cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
         cbar = fig.colorbar(im2, cax=cbar_ax)
         fig.savefig(figname + '.png')
+        plt.close(fig)
     pdb.set_trace()
         
-        
-        
+    #: --- Plot ---
+    #: --- OLD Pixels ---
+    print('Plot 2D Histograms - Old')
+    for ctyp in ['all', 'cld', 'cld_thin', 'clr']:
+        if ctyp == 'all':
+            title = '2D Hist - Old pixels'
+            figname = '%s/2dhist_olds_all' %plotDir
+            inds = olds
+        elif ctyp == 'cld':
+            title = '2D Hist - Old and Cloudy pixels'
+            figname = '%s/2dhist_olds_cld' %plotDir
+            inds = olds_cld
+        elif ctyp == 'cld_thin':
+            title = '2D Hist - Old and Thin Cloudy pixels'
+            figname = '%s/2dhist_olds_cld_thin' %plotDir
+            inds = olds_cldt
+        elif ctyp == 'clr':
+            title = '2D Hist - Old and Clear pixels'
+            figname = '%s/2dhist_olds_clr' %plotDir
+            inds = olds_clr
+        #: 2D Histogram
+        hh1, xedges1, yedges1 = np.histogram2d(lons[inds], lats[inds], bins=[180, 90])
+        hh2, xedges2, yedges2 = np.histogram2d(lons_0[inds], lats_0[inds], bins=[180, 90])
+        #: Latitude boundary
+        ymax = getYmax(yedges1, yedges2)
+        aspect = float('%.2f' %((1/3) / (ymax / 180.)))
+        fig = plt.figure()
+        fig.suptitle(title)
+        #: Subplot 1
+        ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
+        ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+        ax.coastlines()
+        im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])
+        ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+        ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+        ax.tick_params(axis=u'both', which=u'both',length=0)
+        ax.set_title('Trazilla')
+        fig.subplots_adjust(right=0.89)
+        cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
+        cbar = fig.colorbar(im1, cbar_ax)
+        ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
+        ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+        ax.coastlines()
+        im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])
+        ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+        ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+        ax.tick_params(axis=u'both', which=u'both',length=0)
+        ax.set_title('Dardar')
+        fig.subplots_adjust(right=0.89)
+        cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
+        cbar = fig.colorbar(im2, cax=cbar_ax)
+        # figname = '%s/2dhist_olds_all' %plotDir
+        fig.savefig(figname + '.png') 
+        plt.close(fig)
+    pdb.set_trace()
+    
 #     hh1, xedges1, yedges1 = np.histogram2d(lons[hits], lats[hits], bins=[180, 90])
 #     hh2, xedges2, yedges2 = np.histogram2d(lons_0[hits], lats_0[hits], bins=[180, 90])#, bins=400)#, density=True)
 #     ymax = getYmax(yedges1, yedges2)
@@ -936,132 +994,132 @@ if __name__ == '__main__':
 #
 #
 #     pdb.set_trace()
-    
-    #: --- Plot ---
-    #: --- OLD Pixels ---
-    hh1, xedges1, yedges1 = np.histogram2d(lons[olds], lats[olds], bins=[180, 90])
-    hh2, xedges2, yedges2 = np.histogram2d(lons_0[olds], lats_0[olds], bins=[180, 90])#, bins=400)#, density=True)
-    ymax = getYmax(yedges1, yedges2)
-    aspect = float('%.2f' %((1/3) / (ymax / 180.)))
-    fig = plt.figure()
-    fig.suptitle('2D Hist - Old pixels')
-    ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
-    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
-    ax.coastlines()
-    im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])#, vmin=vmin, vmax=vmax)
-    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
-    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
-    ax.tick_params(axis=u'both', which=u'both',length=0)
-    ax.set_title('Trazilla')
-    fig.subplots_adjust(right=0.89)
-    cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
-    cbar = fig.colorbar(im1, cbar_ax)
-    ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
-    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
-    ax.coastlines()
-    im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])#, vmin=vmin, vmax=vmax)
-    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
-    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
-    ax.tick_params(axis=u'both', which=u'both',length=0)
-    ax.set_title('Dardar')
-    fig.subplots_adjust(right=0.89)
-    cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
-    cbar = fig.colorbar(im2, cax=cbar_ax)
-    figname = '%s/2dhist_olds_all' %plotDir
-    fig.savefig(figname + '.png')
-    
-    hh1, xedges1, yedges1 = np.histogram2d(lons[olds_cld], lats[olds_cld], bins=[180, 90])
-    hh2, xedges2, yedges2 = np.histogram2d(lons_0[olds_cld], lats_0[olds_cld], bins=[180, 90])#, bins=400)#, density=True)
-    ymax = getYmax(yedges1, yedges2)
-    aspect = float('%.2f' %((1/3) / (ymax / 180.)))
-    fig = plt.figure()
-    fig.suptitle('2D Hist - Old and Cloudy pixels')
-    ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
-    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
-    ax.coastlines()
-    im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])#, vmin=vmin, vmax=vmax)
-    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
-    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
-    ax.tick_params(axis=u'both', which=u'both',length=0)
-    ax.set_title('Trazilla')
-    fig.subplots_adjust(right=0.89)
-    cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
-    cbar = fig.colorbar(im1, cbar_ax)
-    ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
-    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
-    ax.coastlines()
-    im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])#, vmin=vmin, vmax=vmax)
-    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
-    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
-    ax.tick_params(axis=u'both', which=u'both',length=0)
-    ax.set_title('Dardar')
-    fig.subplots_adjust(right=0.89)
-    cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
-    cbar = fig.colorbar(im2, cax=cbar_ax)
-    figname = '%s/2dhist_olds_cld' %plotDir
-    fig.savefig(figname + '.png')
-    
-    hh1, xedges1, yedges1 = np.histogram2d(lons[olds_clr], lats[olds_clr], bins=[180, 90])
-    hh2, xedges2, yedges2 = np.histogram2d(lons_0[olds_clr], lats_0[olds_clr], bins=[180, 90])#, bins=400)#, density=True)
-    ymax = getYmax(yedges1, yedges2)
-    aspect = float('%.2f' %((1/3) / (ymax / 180.)))
-    fig = plt.figure()
-    fig.suptitle('2D Hist - Old and Clear pixels')
-    ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
-    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
-    ax.coastlines()
-    im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])#, vmin=vmin, vmax=vmax)
-    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
-    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
-    ax.tick_params(axis=u'both', which=u'both',length=0)
-    ax.set_title('Trazilla')
-    fig.subplots_adjust(right=0.89)
-    cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
-    cbar = fig.colorbar(im1, cbar_ax)
-    ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
-    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
-    ax.coastlines()
-    im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])#, vmin=vmin, vmax=vmax)
-    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
-    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
-    ax.tick_params(axis=u'both', which=u'both',length=0)
-    ax.set_title('Dardar')
-    fig.subplots_adjust(right=0.89)
-    cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
-    cbar = fig.colorbar(im2, cax=cbar_ax)
-    figname = '%s/2dhist_olds_clr' %plotDir
-    fig.savefig(figname + '.png')
-    
-    hh1, xedges1, yedges1 = np.histogram2d(lons[olds_cldt], lats[olds_cldt], bins=[180, 90])
-    hh2, xedges2, yedges2 = np.histogram2d(lons_0[olds_cldt], lats_0[olds_cldt], bins=[180, 90])#, bins=400)#, density=True)
-    ymax = getYmax(yedges1, yedges2)
-    aspect = float('%.2f' %((1/3) / (ymax / 180.)))
-    fig = plt.figure()
-    fig.suptitle('2D Hist - Old and Thin Cloudy pixels')
-    ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
-    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
-    ax.coastlines()
-    im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])#, vmin=vmin, vmax=vmax)
-    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
-    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
-    ax.tick_params(axis=u'both', which=u'both',length=0)
-    ax.set_title('Trazilla')
-    fig.subplots_adjust(right=0.89)
-    cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
-    cbar = fig.colorbar(im1, cbar_ax)
-    ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
-    ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
-    ax.coastlines()
-    im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])#, vmin=vmin, vmax=vmax)
-    ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
-    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
-    ax.tick_params(axis=u'both', which=u'both',length=0)
-    ax.set_title('Dardar')
-    fig.subplots_adjust(right=0.89)
-    cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
-    cbar = fig.colorbar(im2, cax=cbar_ax)
-    figname = '%s/2dhist_olds_cld_thin' %plotDir
-    fig.savefig(figname + '.png')
+#
+    # #: --- Plot ---
+    # #: --- OLD Pixels ---
+    # hh1, xedges1, yedges1 = np.histogram2d(lons[olds], lats[olds], bins=[180, 90])
+    # hh2, xedges2, yedges2 = np.histogram2d(lons_0[olds], lats_0[olds], bins=[180, 90])#, bins=400)#, density=True)
+    # ymax = getYmax(yedges1, yedges2)
+    # aspect = float('%.2f' %((1/3) / (ymax / 180.)))
+    # fig = plt.figure()
+    # fig.suptitle('2D Hist - Old pixels')
+    # ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
+    # ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+    # ax.coastlines()
+    # im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])#, vmin=vmin, vmax=vmax)
+    # ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    # ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    # ax.tick_params(axis=u'both', which=u'both',length=0)
+    # ax.set_title('Trazilla')
+    # fig.subplots_adjust(right=0.89)
+    # cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
+    # cbar = fig.colorbar(im1, cbar_ax)
+    # ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
+    # ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+    # ax.coastlines()
+    # im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])#, vmin=vmin, vmax=vmax)
+    # ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    # ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    # ax.tick_params(axis=u'both', which=u'both',length=0)
+    # ax.set_title('Dardar')
+    # fig.subplots_adjust(right=0.89)
+    # cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
+    # cbar = fig.colorbar(im2, cax=cbar_ax)
+    # figname = '%s/2dhist_olds_all' %plotDir
+    # fig.savefig(figname + '.png')
+    #
+    # hh1, xedges1, yedges1 = np.histogram2d(lons[olds_cld], lats[olds_cld], bins=[180, 90])
+    # hh2, xedges2, yedges2 = np.histogram2d(lons_0[olds_cld], lats_0[olds_cld], bins=[180, 90])#, bins=400)#, density=True)
+    # ymax = getYmax(yedges1, yedges2)
+    # aspect = float('%.2f' %((1/3) / (ymax / 180.)))
+    # fig = plt.figure()
+    # fig.suptitle('2D Hist - Old and Cloudy pixels')
+    # ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
+    # ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+    # ax.coastlines()
+    # im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])#, vmin=vmin, vmax=vmax)
+    # ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    # ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    # ax.tick_params(axis=u'both', which=u'both',length=0)
+    # ax.set_title('Trazilla')
+    # fig.subplots_adjust(right=0.89)
+    # cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
+    # cbar = fig.colorbar(im1, cbar_ax)
+    # ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
+    # ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+    # ax.coastlines()
+    # im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])#, vmin=vmin, vmax=vmax)
+    # ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    # ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    # ax.tick_params(axis=u'both', which=u'both',length=0)
+    # ax.set_title('Dardar')
+    # fig.subplots_adjust(right=0.89)
+    # cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
+    # cbar = fig.colorbar(im2, cax=cbar_ax)
+    # figname = '%s/2dhist_olds_cld' %plotDir
+    # fig.savefig(figname + '.png')
+    #
+    # hh1, xedges1, yedges1 = np.histogram2d(lons[olds_clr], lats[olds_clr], bins=[180, 90])
+    # hh2, xedges2, yedges2 = np.histogram2d(lons_0[olds_clr], lats_0[olds_clr], bins=[180, 90])#, bins=400)#, density=True)
+    # ymax = getYmax(yedges1, yedges2)
+    # aspect = float('%.2f' %((1/3) / (ymax / 180.)))
+    # fig = plt.figure()
+    # fig.suptitle('2D Hist - Old and Clear pixels')
+    # ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
+    # ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+    # ax.coastlines()
+    # im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])#, vmin=vmin, vmax=vmax)
+    # ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    # ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    # ax.tick_params(axis=u'both', which=u'both',length=0)
+    # ax.set_title('Trazilla')
+    # fig.subplots_adjust(right=0.89)
+    # cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
+    # cbar = fig.colorbar(im1, cbar_ax)
+    # ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
+    # ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+    # ax.coastlines()
+    # im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])#, vmin=vmin, vmax=vmax)
+    # ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    # ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    # ax.tick_params(axis=u'both', which=u'both',length=0)
+    # ax.set_title('Dardar')
+    # fig.subplots_adjust(right=0.89)
+    # cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
+    # cbar = fig.colorbar(im2, cax=cbar_ax)
+    # figname = '%s/2dhist_olds_clr' %plotDir
+    # fig.savefig(figname + '.png')
+    #
+    # hh1, xedges1, yedges1 = np.histogram2d(lons[olds_cldt], lats[olds_cldt], bins=[180, 90])
+    # hh2, xedges2, yedges2 = np.histogram2d(lons_0[olds_cldt], lats_0[olds_cldt], bins=[180, 90])#, bins=400)#, density=True)
+    # ymax = getYmax(yedges1, yedges2)
+    # aspect = float('%.2f' %((1/3) / (ymax / 180.)))
+    # fig = plt.figure()
+    # fig.suptitle('2D Hist - Old and Thin Cloudy pixels')
+    # ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
+    # ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+    # ax.coastlines()
+    # im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])#, vmin=vmin, vmax=vmax)
+    # ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    # ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    # ax.tick_params(axis=u'both', which=u'both',length=0)
+    # ax.set_title('Trazilla')
+    # fig.subplots_adjust(right=0.89)
+    # cbar_ax = fig.add_axes([0.90, 0.55, 0.01, 0.30])
+    # cbar = fig.colorbar(im1, cbar_ax)
+    # ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
+    # ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
+    # ax.coastlines()
+    # im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])#, vmin=vmin, vmax=vmax)
+    # ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
+    # ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    # ax.tick_params(axis=u'both', which=u'both',length=0)
+    # ax.set_title('Dardar')
+    # fig.subplots_adjust(right=0.89)
+    # cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
+    # cbar = fig.colorbar(im2, cax=cbar_ax)
+    # figname = '%s/2dhist_olds_cld_thin' %plotDir
+    # fig.savefig(figname + '.png')
     
     
     
