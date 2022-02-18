@@ -231,13 +231,27 @@ def getCatalogFile(fn, p0=None):
                     print('Lon 1 test')
                     pdb.set_trace()
             
-            
+            # (np.reshape(pres, npart).reshape(npart//nlev, nlev) == pres).all()
+            # (np.reshape(pres, npart).reshape(len(sel), nlev) == pres).all()
+            # npart = nlev * len(sel)
+            # nlev = objects[da][orbit]['npart'] // objects[da][orbit]['lensel']
+            # npart = objects[da][orbit]['npart']
+            lensel = objects[da][orbit]['lensel']
             for retvn in retv.keys():
                 if retvn in ['lensel', 'npart']:
                     retv[retvn] = np.concatenate((retv[retvn], np.repeat(objects[da][orbit][nameDic[retvn]], (ep-sp))))
+                elif retvn in ['height']:
+                    #: Create 2D
+                    # np.repeat(altx.reshape((1, -1)), len(sel), axis=0)
+                    #: reshape to 1D
+                    # np.reshape(np.repeat(altx.reshape((1, -1)), len(sel), axis=0), npart)
+                    #: Both in 1 line
+                    # np.reshape(np.repeat(objects[da][orbit][nameDic[retvn]].reshape((1, -1)), lensel, axis=0), npart)
+                    #: This is the same
+                    htemp = np.tile(objects[da][orbit][nameDic[retvn]], lensel)
+                    retv[retvn] = np.concatenate((retv[retvn], htemp))
                 else:
                     retv[retvn] = np.concatenate((retv[retvn], objects[da][orbit][nameDic[retvn]]))
-
             sp = ep
     
     
@@ -520,94 +534,110 @@ if __name__ == '__main__':
     #: https://stackoverflow.com/questions/50611018/cartopy-heatmap-over-openstreetmap-background/50638691
     print('Plot')
     heightBoundaries = [[None, None], [14,16], [16, 18], [18,20]]
-    title_use = 'Hits pixels'
-    for h1, h2 in heightBoundaries:
-        if h1 is None:
-            continue
-        pdb.set_trace()
-        if (h1 is None) and (h2 is None):
-            ind_use = hits
-        elif h2 == heightBoundaries[-1][1]:
-            ind_use = hits & (catalog['height'] >= h1) & (catalog['height'] <= h2)
-        else:
-            ind_use = hits & (catalog['height'] >= h1) & (catalog['height'] < h2)
+    for ctyp in ['all', 'cld', 'cld_thin', 'clr']:
+        if ctyp == 'all':
+            title = 'Hits pixels'
+            figname = '%s/hist_age_all' %plotDir
+            inds = hits
+        elif ctyp == 'cld':
+            title = 'Hits and Cloudy pixels'
+            figname = '%s/hist_age_cld' %plotDir
+            inds = hits_cld
+        elif ctyp == 'cld_thin':
+            title = 'Hits and Thin Cloudy pixels'
+            figname = '%s/hist_age_cld_thin' %plotDir
+            inds = hits_cldt
+        elif ctyp == 'clr':
+            title = 'Hits pixels Clear pixels'
+            figname = '%s/hist_age_clr' %plotDir
+            inds = hits_clr
         
-        
-        #: --- Plot ---
-        fig = plt.figure()
-        ax = fig.add_subplot(2,1,1)
-        # fig.suptitle('Age histogram')
-        h = ax.hist(age[ind_use] / 86400, bins=400)#, density=True)
-        # h = ax.hist(age[hits] / 86400, bins=np.logspace(np.log10(0.001),np.log10(42.0), 400))#bins=400)#, density=True)
-        # ax.set_xscale('log')
-        # fig.gca().set_xscale("log")
-        # ax.set_xlabel('Age [days]')
-        ax.set_title('Hits pixels')
-        ax.text(0.7, 0.9,'total = %d' %ind_use.sum(),
-                horizontalalignment='center',
-                verticalalignment='center',
-                transform = ax.transAxes)
-        ax = fig.add_subplot(2,1,2)
-        h = ax.hist(age[ind_use] / 86400, bins=400)#, density=True)
-        ax.set_yscale('log')
-        ax.set_xlabel('Age [days]')
-        # ax.set_title('Hits pixels')
-        plt.tight_layout()
-        figname = '%s/hist_age_all' %plotDir
-        fig.savefig(figname + '.png')
+        for h1, h2 in heightBoundaries:
+            if h1 is None:
+                continue
+            if not ((h1 is None) and (h2 is None)):
+                title_use = title + ', %d - %d' %(h1, h2)
+                figname_use = figname + '_%d-%d' %(h1, h2)
+                if h2 == heightBoundaries[-1][1]:
+                    inds_h = (catalog['height'] >= h1) & (catalog['height'] <= h2)
+                else:
+                    inds_h = (catalog['height'] >= h1) & (catalog['height'] < h2)
+                inds_use = inds & inds_h 
+            #: --- Plot ---
+            fig = plt.figure()
+            ax = fig.add_subplot(2,1,1)
+            # fig.suptitle('Age histogram')
+            h = ax.hist(age[inds_use] / 86400, bins=400)#, density=True)
+            # h = ax.hist(age[hits] / 86400, bins=np.logspace(np.log10(0.001),np.log10(42.0), 400))#bins=400)#, density=True)
+            # ax.set_xscale('log')
+            # fig.gca().set_xscale("log")
+            # ax.set_xlabel('Age [days]')
+            ax.set_title(title_use)
+            ax.text(0.7, 0.9,'total = %d' %inds_use.sum(),
+                    horizontalalignment='center',
+                    verticalalignment='center',
+                    transform = ax.transAxes)
+            ax = fig.add_subplot(2,1,2)
+            h = ax.hist(age[inds_use] / 86400, bins=400)#, density=True)
+            ax.set_yscale('log')
+            ax.set_xlabel('Age [days]')
+            # ax.set_title('Hits pixels')
+            plt.tight_layout()
+            fig.savefig(figname_use + '.png')
     # pdb.set_trace()
-    
-    #: --- Plot ---
-    fig = plt.figure()
-    ax = fig.add_subplot(2,1,1)
-    ax.hist(age[hits_cld] / 86400, bins=400)#, density=True)
-    ax.set_title('Hits and Cloudy pixels')
-    ax.text(0.7, 0.9,'total = %d' %hits_cld.sum(),
-            horizontalalignment='center',
-            verticalalignment='center',
-            transform = ax.transAxes)
-    ax = fig.add_subplot(2,1,2)
-    ax.hist(age[hits_cld] / 86400, bins=400)#, density=True)
-    ax.set_yscale('log')
-    ax.set_xlabel('Age [days]')
-    plt.tight_layout()
-    figname = '%s/hist_age_cld' %plotDir
-    fig.savefig(figname + '.png')
-    
-    #: --- Plot ---
-    fig = plt.figure()
-    # fig.suptitle('Age histogram')
-    ax = fig.add_subplot(2,1,1)
-    ax.hist(age[hits_clr] / 86400, bins=400)#, density=True)
-    ax.set_title('Hits and Clear pixels')
-    ax.text(0.7, 0.9,'total = %d' %hits_clr.sum(),
-            horizontalalignment='center',
-            verticalalignment='center',
-            transform = ax.transAxes)
-    ax = fig.add_subplot(2,1,2)
-    ax.hist(age[hits_clr] / 86400, bins=400)#, density=True)
-    ax.set_yscale('log')
-    ax.set_xlabel('Age [days]')
-    plt.tight_layout()
-    figname = '%s/hist_age_clr' %plotDir
-    fig.savefig(figname + '.png')
-    
-    #: --- Plot ---
-    fig = plt.figure()
-    ax = fig.add_subplot(2,1,1)
-    ax.hist(age[hits_cldt] / 86400, bins=400)#, density=True)
-    ax.set_title('Hits and Thin Cloudy pixels')
-    ax.text(0.7, 0.9,'total = %d' %hits_cldt.sum(),
-            horizontalalignment='center',
-            verticalalignment='center',
-            transform = ax.transAxes)
-    ax = fig.add_subplot(2,1,2)
-    ax.hist(age[hits_cldt] / 86400, bins=400)#, density=True)
-    ax.set_yscale('log')
-    ax.set_xlabel('Age [days]')
-    plt.tight_layout()
-    figname = '%s/hist_age_cld_thin' %plotDir
-    fig.savefig(figname + '.png')
+    pdb.set_trace()
+    #
+    # #: --- Plot ---
+    # fig = plt.figure()
+    # ax = fig.add_subplot(2,1,1)
+    # ax.hist(age[hits_cld] / 86400, bins=400)#, density=True)
+    # ax.set_title('Hits and Cloudy pixels')
+    # ax.text(0.7, 0.9,'total = %d' %hits_cld.sum(),
+    #         horizontalalignment='center',
+    #         verticalalignment='center',
+    #         transform = ax.transAxes)
+    # ax = fig.add_subplot(2,1,2)
+    # ax.hist(age[hits_cld] / 86400, bins=400)#, density=True)
+    # ax.set_yscale('log')
+    # ax.set_xlabel('Age [days]')
+    # plt.tight_layout()
+    # figname = '%s/hist_age_cld' %plotDir
+    # fig.savefig(figname + '.png')
+    #
+    # #: --- Plot ---
+    # fig = plt.figure()
+    # # fig.suptitle('Age histogram')
+    # ax = fig.add_subplot(2,1,1)
+    # ax.hist(age[hits_clr] / 86400, bins=400)#, density=True)
+    # ax.set_title('Hits and Clear pixels')
+    # ax.text(0.7, 0.9,'total = %d' %hits_clr.sum(),
+    #         horizontalalignment='center',
+    #         verticalalignment='center',
+    #         transform = ax.transAxes)
+    # ax = fig.add_subplot(2,1,2)
+    # ax.hist(age[hits_clr] / 86400, bins=400)#, density=True)
+    # ax.set_yscale('log')
+    # ax.set_xlabel('Age [days]')
+    # plt.tight_layout()
+    # figname = '%s/hist_age_clr' %plotDir
+    # fig.savefig(figname + '.png')
+    #
+    # #: --- Plot ---
+    # fig = plt.figure()
+    # ax = fig.add_subplot(2,1,1)
+    # ax.hist(age[hits_cldt] / 86400, bins=400)#, density=True)
+    # ax.set_title('Hits and Thin Cloudy pixels')
+    # ax.text(0.7, 0.9,'total = %d' %hits_cldt.sum(),
+    #         horizontalalignment='center',
+    #         verticalalignment='center',
+    #         transform = ax.transAxes)
+    # ax = fig.add_subplot(2,1,2)
+    # ax.hist(age[hits_cldt] / 86400, bins=400)#, density=True)
+    # ax.set_yscale('log')
+    # ax.set_xlabel('Age [days]')
+    # plt.tight_layout()
+    # figname = '%s/hist_age_cld_thin' %plotDir
+    # fig.savefig(figname + '.png')
 
     #: --- Plot ---
     if False:
