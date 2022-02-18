@@ -536,57 +536,57 @@ if __name__ == '__main__':
     print('Plot Age Histograms')
     for ctyp in ['all', 'cld', 'cld_thin', 'clr']:
         if ctyp == 'all':
-            title = 'Hits pixels'
-            figname = '%s/hist_age_all' %plotDir
-            inds = hits
+            title_org = 'Hits pixels'
+            figname_org = '%s/hist_age_all' %plotDir
+            inds_org = hits
         elif ctyp == 'cld':
-            title = 'Hits and Cloudy pixels'
-            figname = '%s/hist_age_cld' %plotDir
-            inds = hits_cld
+            title_org = 'Hits and Cloudy pixels'
+            figname_org = '%s/hist_age_cld' %plotDir
+            inds_org = hits_cld
         elif ctyp == 'cld_thin':
-            title = 'Hits and Thin Cloudy pixels'
-            figname = '%s/hist_age_cld_thin' %plotDir
-            inds = hits_cldt
+            title_org = 'Hits and Thin Cloudy pixels'
+            figname_org = '%s/hist_age_cld_thin' %plotDir
+            inds_org = hits_cldt
         elif ctyp == 'clr':
-            title = 'Hits pixels Clear pixels'
-            figname = '%s/hist_age_clr' %plotDir
-            inds = hits_clr
+            title_org = 'Hits pixels Clear pixels'
+            figname_org = '%s/hist_age_clr' %plotDir
+            inds_org = hits_clr
         
         for h1, h2 in heightBoundaries:
             if not ((h1 is None) and (h2 is None)):
-                title_use = title + ', %d - %d km' %(h1, h2)
-                figname_use = figname + '_%d-%d' %(h1, h2)
+                title = title_org + ', %d - %d km' %(h1, h2)
+                figname = figname_org + '_%d-%d' %(h1, h2)
                 if h2 == heightBoundaries[-1][1]:
                     inds_h = (catalog['height'] >= h1) & (catalog['height'] <= h2)
                 else:
                     inds_h = (catalog['height'] >= h1) & (catalog['height'] < h2)
-                inds_use = inds & inds_h
+                inds = inds_org & inds_h
             else:
-                title_use = title
-                figname_use = figname
-                inds_use = inds
+                title = title_org
+                figname = figname_org
+                inds = inds_org
                 
             #: --- Plot ---
             fig = plt.figure()
             ax = fig.add_subplot(2,1,1)
             # fig.suptitle('Age histogram')
-            h = ax.hist(age[inds_use] / 86400, bins=400)#, density=True)
+            h = ax.hist(age[inds] / 86400, bins=400)#, density=True)
             # h = ax.hist(age[hits] / 86400, bins=np.logspace(np.log10(0.001),np.log10(42.0), 400))#bins=400)#, density=True)
             # ax.set_xscale('log')
             # fig.gca().set_xscale("log")
             # ax.set_xlabel('Age [days]')
-            ax.set_title(title_use)
-            ax.text(0.7, 0.9,'total = %d' %inds_use.sum(),
+            ax.set_title(title)
+            ax.text(0.7, 0.9,'total = %d' %inds.sum(),
                     horizontalalignment='center',
                     verticalalignment='center',
                     transform = ax.transAxes)
             ax = fig.add_subplot(2,1,2)
-            h = ax.hist(age[inds_use] / 86400, bins=400)#, density=True)
+            h = ax.hist(age[inds] / 86400, bins=400)#, density=True)
             ax.set_yscale('log')
             ax.set_xlabel('Age [days]')
             # ax.set_title('Hits pixels')
             plt.tight_layout()
-            fig.savefig(figname_use + '.png')
+            fig.savefig(figname + '.png')
             plt.close(fig)
     # pdb.set_trace()
 
