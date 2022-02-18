@@ -553,8 +553,6 @@ if __name__ == '__main__':
             inds = hits_clr
         
         for h1, h2 in heightBoundaries:
-            if h1 is None:
-                continue
             if not ((h1 is None) and (h2 is None)):
                 title_use = title + ', %d - %d km' %(h1, h2)
                 figname_use = figname + '_%d-%d' %(h1, h2)
@@ -562,7 +560,12 @@ if __name__ == '__main__':
                     inds_h = (catalog['height'] >= h1) & (catalog['height'] <= h2)
                 else:
                     inds_h = (catalog['height'] >= h1) & (catalog['height'] < h2)
-                inds_use = inds & inds_h 
+                inds_use = inds & inds_h
+            else:
+                title_use = title
+                figname_use = figname
+                inds_use = inds
+                
             #: --- Plot ---
             fig = plt.figure()
             ax = fig.add_subplot(2,1,1)
