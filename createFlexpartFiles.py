@@ -43,9 +43,9 @@ if __name__ == '__main__':
     useDardar = args.use_dardar
     #: Day / night / 24h
     dnf = args.night
-    
     startDate = datetime.datetime(year, mon, 1, 0, 0) + relativedelta(months=1)
-    endDate = startDate - relativedelta(days=75)
+    max_life_time = 100
+    endDate = startDate - relativedelta(days=135) #: = max_life_time + >31 (~35)
 
     # year_p1 = startDate.year
     # mon_p1 = startDate.month
@@ -69,7 +69,7 @@ if __name__ == '__main__':
     #: Path for RELEASES and COMMAND files
     optPath = '%s/CALIOP-EAD-%d%02d-%s' %(optDir, year, mon, dnf)
     #: The RELEASES file. This one is same for everyone
-    src_Relise = '%s/RELEASES' %optDir
+    # src_Relise = '%s/RELEASES' %optDir
     #: File with the printstatment traxilla is creating during run
     trazilla_outfn = '%s/traczilla-CALIOP-EAD-%d%02d-%s' %(runDir, year, mon, dnf)
     #: Part file
@@ -109,7 +109,8 @@ if __name__ == '__main__':
     #: startfile i.e. file from selCaliop
     outlink = '%s/part_000' %resultDir
     #: Link to RELEASES file.
-    link_Relise = '%s/RELEASES' %optPath
+    # link_Relise = '%s/RELEASES' %optPath
+    releasfn = '%s/RELEASES' %optPath
     #: No link. File with commands for tracilla. Is created here
     commandfn = '%s/COMMAND' %optPath
 
@@ -159,19 +160,19 @@ if __name__ == '__main__':
             
         if not os.path.isdir(optPath):
             os.makedirs(optPath)
-        if not os.path.islink(link_Relise):
-            os.symlink(src_Relise, link_Relise)
-        if not os.path.exists(link_Relise):
-            print('broken link')
-            print('src = %s' %src_Relise)
-            print('link = %s' %link_Relise)
-            sys.exit()
+        # if not os.path.islink(link_Relise):
+        #     os.symlink(src_Relise, link_Relise)
+        # if not os.path.exists(link_Relise):
+        #     print('broken link')
+        #     print('src = %s' %src_Relise)
+        #     print('link = %s' %link_Relise)
+        #     sys.exit()
         
         #: Create do-file
         print(dofn)
         dof = open(dofn, 'w')
         dof.writelines('#!/bin/bash \n')
-        dof.writelines('#PBS -q day \n')
+        dof.writelines('#PBS -q days3 \n')
         dof.writelines('#PBS -l nodes=1:ppn=16 -l mem=5gb -l vmem=5gb \n')
         dof.writelines('#PBS -N %s \n' %(jobname))
         dof.writelines('#PBS -o %s.out \n' %qsub_outfile)
@@ -243,7 +244,26 @@ if __name__ == '__main__':
     commandf.writelines(" &END\n")
     commandf.writelines("\n")
     commandf.close()
-
+    
+    print(releasfn)
+    releasf = open(releasfn, 'w')
+    releasf.writelines("#RELEASES\n")
+    releasf.writelines("#************************************************************************\n")
+    releasf.writelines("#                                                                       *\n")
+    releasf.writelines("#   Input file for the Lagrangian particle dispersion model TRACZILLA   *\n")
+    releasf.writelines("#                        Please select your option    *\n")
+    releasf.writelines("#                                                                       *\n")
+    releasf.writelines("#************************************************************************\n")
+    releasf.writelines("&StratoClim\n")
+    releasf.writelines("pcut=50000\n")
+    releasf.writelines("plowcut=50\n")
+    releasf.writelines("NearRealTime=.false.\n")
+    releasf.writelines("startfrom0=.true.\n")
+    releasf.writelines("setxylim=.false.\n")
+    releasf.writelines("max_life_time=%d\n" %max_life_time)
+    releasf.writelines("&END\n")
+    # releasf.writelines("\n")
+    releasf.close()
     print(resultDir)
     
     if args.qsub:
