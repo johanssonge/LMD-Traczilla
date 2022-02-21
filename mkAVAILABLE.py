@@ -38,7 +38,7 @@ date = datetime(year,m1,d1,0)
 date_stop = date + relativedelta(months=m2-m1+1)
 if extended:
     date_stop = date_stop + relativedelta(days=1)
-    date_start = date - relativedelta(months=2)
+    date_start = date - relativedelta(months=6)
     saveDir = '/data/ejohansson/ERA5/indexes'
 else:
     date_start = date
