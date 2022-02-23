@@ -121,7 +121,7 @@ def main():
 
     """ Parameters """
     step = args.step
-    hmax = 1800 #: 75 days (75 * 24 = 1800)
+    hmax = 3240 #1800 #: 75 days (75 * 24 = 1800)
     #hmax = 18
     dstep = timedelta(hours=step)
     # time width of the parcel slice
@@ -135,7 +135,8 @@ def main():
     #day1=1
     #day2=31
     #: Age bound, Just smaller than tracilla max_life_time=42
-    age_bound = 41.75
+    # age_bound = 41.75
+    age_bound = 99.75
     advect = 'EAD'
     suffix =''
     quiet = False
