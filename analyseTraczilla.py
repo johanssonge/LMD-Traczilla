@@ -286,83 +286,113 @@ def getCatalogFile(fn, p0=None):
     return retv
 
 
-def getInitfiles(mD, years, months, dn, uD):
+def getInitfiles(mD, years, months, dn, uD, lt=True):
     if (not isinstance(years, list)) or (not isinstance(months, list)):
         print('Wrong type')
         pdb.set_trace()
-    outnames = []
-    i = -1
-    for y in years:
-        for m in months:
-            i = i + 1
-            #: Directories of the backward trajectories and name of the output file
-            outname = 'CALIOP-EAD-%d%02d-%s' %(y, m, dn)
-            if uD:
-                outname = outname + '-DD'
-            outnames.append(outname)
-            trajDir = os.path.join(mD,outname) 
-            initDir = os.path.join(trajDir, 'Initfiles')
-            
-            paramname = 'selDardar_Params-%s.pkl' %'-'.join(outname.split('-')[2:4])
-            catalogname = paramname.replace('_Params-', '_Calalog-')
-            paramFile = os.path.join(initDir, paramname)
-            catalFile = os.path.join(initDir, catalogname)
-            pf = readidx107(os.path.join(trajDir,'part_000'),quiet=False)
-            cf = getCatalogFile(catalFile, pf)
-            mf = readParamFile(paramFile)
-            pf['x'] = np.where(pf['x'] > 180, pf['x'] - 360, pf['x'])
-            if i == 0:
-                retvP = pf.copy()
-                retvC = cf.copy()
-                retvM = mf.copy()
-            else:
-                for arname in retvP.keys():
-                    if isinstance(retvP[arname], int):
-                        retvP[arname] = [retvP[arname]]
-                    if isinstance(pf[arname], int):
-                        pf[arname] = [pf[arname]]
-                    retvP[arname] = np.concatenate((np.asarray(retvP[arname]), np.asarray(pf[arname])))
-                
-                for arname in retvC.keys():
-                    if isinstance(retvC[arname], int):
-                        retvC[arname] = [retvC[arname]]
-                    if isinstance(cf[arname], int):
-                        cf[arname] = [cf[arname]]
-                    retvC[arname] = np.concatenate((np.asarray(retvC[arname]), np.asarray(cf[arname])))
-                
-                for arname in retvM.keys():
-                    if isinstance(retvM[arname], (int, np.int64, str, datetime.datetime)):
-                        retvM[arname] = [retvM[arname]]
-                    if isinstance(mf[arname], (int, np.int64, str, datetime.datetime)):
-                        mf[arname] = [mf[arname]]
-                    retvM[arname] = np.concatenate((np.asarray(retvM[arname]), np.asarray(mf[arname])))
     
+    #: Decide the name for tempfile
+    if (len(years) == 1) and (len(months) == 12):
+        tempname = os.path.join(mD,'TempFiles', 'CALIOP-EAD-%d-%s' %(years[0], dn))
+        if uD:
+            tempname = tempname + '-DD'
+        tempname = tempname + '-init'
+        loadname = tempname + '.npy'
+    else:
+        loadname = ''
+    #: If tempfile exist and lt = True, load the tempfile
+    if lt and os.path.isfile(loadname):
+        retvP, retvC, retvM, outnamesT = np.load(loadname, allow_pickle=True)
+        outnames = [tempname, outnamesT]
+    #: if tempfile do not exist or lt = False. Do calculations
+    else:
+        outnames = []
+        i = -1
+        for y in years:
+            for m in months:
+                i = i + 1
+                #: Directories of the backward trajectories and name of the output file
+                outname = 'CALIOP-EAD-%d%02d-%s' %(y, m, dn)
+                if uD:
+                    outname = outname + '-DD'
+                outnames.append(outname)
+                trajDir = os.path.join(mD,outname) 
+                initDir = os.path.join(trajDir, 'Initfiles')
+                
+                paramname = 'selDardar_Params-%s.pkl' %'-'.join(outname.split('-')[2:4])
+                catalogname = paramname.replace('_Params-', '_Calalog-')
+                paramFile = os.path.join(initDir, paramname)
+                catalFile = os.path.join(initDir, catalogname)
+                pf = readidx107(os.path.join(trajDir,'part_000'),quiet=False)
+                cf = getCatalogFile(catalFile, pf)
+                mf = readParamFile(paramFile)
+                pf['x'] = np.where(pf['x'] > 180, pf['x'] - 360, pf['x'])
+                if i == 0:
+                    retvP = pf.copy()
+                    retvC = cf.copy()
+                    retvM = mf.copy()
+                else:
+                    for arname in retvP.keys():
+                        if isinstance(retvP[arname], int):
+                            retvP[arname] = [retvP[arname]]
+                        if isinstance(pf[arname], int):
+                            pf[arname] = [pf[arname]]
+                        retvP[arname] = np.concatenate((np.asarray(retvP[arname]), np.asarray(pf[arname])))
+                    
+                    for arname in retvC.keys():
+                        if isinstance(retvC[arname], int):
+                            retvC[arname] = [retvC[arname]]
+                        if isinstance(cf[arname], int):
+                            cf[arname] = [cf[arname]]
+                        retvC[arname] = np.concatenate((np.asarray(retvC[arname]), np.asarray(cf[arname])))
+                    
+                    for arname in retvM.keys():
+                        if isinstance(retvM[arname], (int, np.int64, str, datetime.datetime)):
+                            retvM[arname] = [retvM[arname]]
+                        if isinstance(mf[arname], (int, np.int64, str, datetime.datetime)):
+                            mf[arname] = [mf[arname]]
+                        retvM[arname] = np.concatenate((np.asarray(retvM[arname]), np.asarray(mf[arname])))
+        #: If there are no tempfile, create one
+        if not os.path.isfile(loadname):
+            np.save(tempname, [retvP, retvC, retvM, outnames])
     return retvP, retvC, retvM, outnames
 
 
-def getConvfiles(oD, onames):
+def getConvfiles(oD, inames, lt=True):
     i = -1
-    for outname in onames:
-        i = i + 1
-        fname = os.path.join(oD, outname + '.h5')
-        rvs, fls, age, lons, lats, temp, pres = readConvFile(fname)
-        if i == 0:
-            retvRvs = rvs.copy()
-            retvFls = fls.copy()
-            retvAge = age.copy()
-            retvLons = lons.copy()
-            retvLats = lats.copy()
-            retvTemp = temp.copy()
-            retvPres = pres.copy()
-        else:
-            retvRvs = np.concatenate((retvRvs, rvs))
-            retvFls = np.concatenate((retvFls, fls))
-            retvAge = np.concatenate((retvAge, age))
-            retvLons = np.concatenate((retvLons, lons))
-            retvLats = np.concatenate((retvLats, lats))
-            retvTemp = np.concatenate((retvTemp, temp))
-            retvPres = np.concatenate((retvPres, pres))
-            
+    if (len(inames) == 2) and (isinstance(inames[1], list)):
+        tempname = inames[0].replace('-init', '-conv')
+        loadname = tempname + '.npy'
+        onames = inames[1]
+    else:
+        onames = inames
+        tempname = ''
+        loadname = ''
+    if lt and os.path.isfile(loadname):
+        retvRvs, retvFls, retvAge, retvLons, retvLats, retvTemp, retvPres = np.load(loadname, allow_pickle=True)
+    else:
+        for outname in onames:
+            i = i + 1
+            fname = os.path.join(oD, outname + '.h5')
+            rvs, fls, age, lons, lats, temp, pres = readConvFile(fname)
+            if i == 0:
+                retvRvs = rvs.copy()
+                retvFls = fls.copy()
+                retvAge = age.copy()
+                retvLons = lons.copy()
+                retvLats = lats.copy()
+                retvTemp = temp.copy()
+                retvPres = pres.copy()
+            else:
+                retvRvs = np.concatenate((retvRvs, rvs))
+                retvFls = np.concatenate((retvFls, fls))
+                retvAge = np.concatenate((retvAge, age))
+                retvLons = np.concatenate((retvLons, lons))
+                retvLats = np.concatenate((retvLats, lats))
+                retvTemp = np.concatenate((retvTemp, temp))
+                retvPres = np.concatenate((retvPres, pres))
+        if not os.path.isfile(loadname) and (loadname != ''):
+            np.save(tempname, [retvRvs, retvFls, retvAge, retvLons, retvLats, retvTemp, retvPres])
     return retvRvs, retvFls, retvAge, retvLons, retvLats, retvTemp, retvPres
 
 
@@ -450,8 +480,8 @@ if __name__ == '__main__':
     
     compare = False
     year = [2008]
-    month = [1]
-    #month = [*range(1, 13)]
+    # month = [1]
+    month = [*range(1, 13)]
     dn = 'n'
     useDardar = True
     
@@ -474,6 +504,7 @@ if __name__ == '__main__':
     print('Read Conv-files')
     tic = time.time()
     rvs, fls, age, lons, lats, temp, pres = getConvfiles(outDir, outnames)
+    fls = fls.astype(int)
     print('It took %d sec to read Conv-files' %(time.time() - tic))
     
     # print(time.time() - tic)
@@ -776,7 +807,7 @@ if __name__ == '__main__':
             cbar = fig.colorbar(im2, cax=cbar_ax)
             fig.savefig(figname + '.png')
             plt.close(fig)
-    pdb.set_trace()
+    # pdb.set_trace()
         
     #: --- Plot ---
     #: --- OLD Pixels ---
@@ -846,6 +877,37 @@ if __name__ == '__main__':
             # figname = '%s/2dhist_olds_all' %plotDir
             fig.savefig(figname + '.png') 
             plt.close(fig)
+    
+    
+    
+    for ctyp in ['all', 'cld', 'cld_thin', 'clr']:
+        if ctyp == 'all':
+            title_org = '2D Age - Hits pixels'
+            figname_org = '%s/2dhist_age_hots_all' %plotDir
+            inds_org = hits
+        elif ctyp == 'cld':
+            title_org = '2D Age - Hits and Cloudy pixels'
+            figname_org = '%s/2dhist_age_hits_cld' %plotDir
+            inds_org = hits_cld
+        elif ctyp == 'cld_thin':
+            title_org = '2D Age - Hits and Thin Cloudy pixels'
+            figname_org = '%s/2dhist_age_hits_cld_thin' %plotDir
+            inds_org = hits_cldt
+        elif ctyp == 'clr':
+            title_org = '2D Hist - Hits and Clear pixels'
+            figname_org = '%s/2dhist_age_hits_clr' %plotDir
+            inds_org = hits_clr
+        inds = inds_org
+        figname = figname_org
+        title = title_org
+        #: --- Plot ---
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        hh = ax.hist2d(age[inds] / 86400, catalog['height'][inds], bins=[50, 50])#, bins=400)
+        ax.set_yscale('Height')
+        ax.set_xlabel('Age [days]')
+        ax.set_title(title)
+        fig.savefig(figname + '.png')
     pdb.set_trace()
     
 #     hh1, xedges1, yedges1 = np.histogram2d(lons[hits], lats[hits], bins=[180, 90])
