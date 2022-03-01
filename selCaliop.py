@@ -99,6 +99,7 @@ def readDARDAR(fname, dn):
         
         #: Day/night
         dn_var = ncf.variables['CALIOP_Day_Night_Flag'][:].data
+        extras.update({'CALIOP_Day_Night_Flag': dn_var})
         #: 1 = night
         #: 0 = day
         if dn == 'n':
