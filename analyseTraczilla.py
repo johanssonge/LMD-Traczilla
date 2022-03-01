@@ -353,7 +353,7 @@ def getInitfiles(mD, years, months, dn, uD, lt=True):
                             mf[arname] = [mf[arname]]
                         retvM[arname] = np.concatenate((np.asarray(retvM[arname]), np.asarray(mf[arname])))
         #: If there are no tempfile, create one
-        if not os.path.isfile(loadname):
+        if (loadname != '') and (not os.path.isfile(loadname)):
             np.save(tempname, [retvP, retvC, retvM, outnames])
     return retvP, retvC, retvM, outnames
 
@@ -393,7 +393,7 @@ def getConvfiles(oD, inames, lt=True):
                 retvPres = np.concatenate((retvPres, pres))
         if not os.path.isfile(loadname) and (loadname != ''):
             np.save(tempname, [retvRvs, retvFls, retvAge, retvLons, retvLats, retvTemp, retvPres])
-    return retvRvs, retvFls, retvAge, retvLons, retvLats, retvTemp, retvPres
+    return retvRvs, retvFls.astype(int), retvAge, retvLons, retvLats, retvTemp, retvPres
 
 
 def normalizeLons(lon, lat):
@@ -479,12 +479,12 @@ if __name__ == '__main__':
     plotDir = '%s/LMD-Traczilla/Plots' %scrPath
     
     compare = False
-    year = [2008]
-    # month = [1]
-    month = [*range(1, 13)]
+    year = [2007]
+    month = [1]
+    #month = [*range(1, 13)]
     dn = 'n'
     useDardar = True
-    
+    lt = False
     # outDir = '/data/ejohansson/flexout/STC/Calipso-OUT/Coldpoint'
     #: filename of outfiles
     # outnames = 'CALIOP-'+advect+'-'+date_end.strftime('%b%Y')+diffus+'-%s' %args.night 
@@ -492,7 +492,7 @@ if __name__ == '__main__':
     #     outnames = outnames + '-DD'
     print('Read Init-files')
     tic = time.time()
-    part0, catalog, params, outnames = getInitfiles(mainDir, year, month, dn, useDardar)
+    part0, catalog, params, outnames = getInitfiles(mainDir, year, month, dn, useDardar, lt=lt)
     print('It took %d sec to read Init-files' %(time.time() - tic))
     #: Read the index file that contains the initial positions
     # print('numpart',part0['numpart'])
@@ -503,8 +503,7 @@ if __name__ == '__main__':
     
     print('Read Conv-files')
     tic = time.time()
-    rvs, fls, age, lons, lats, temp, pres = getConvfiles(outDir, outnames)
-    fls = fls.astype(int)
+    rvs, fls, age, lons, lats, temp, pres = getConvfiles(outDir, outnames, lt=lt)
     print('It took %d sec to read Conv-files' %(time.time() - tic))
     
     # print(time.time() - tic)
@@ -561,6 +560,44 @@ if __name__ == '__main__':
         lons2 = checkLons(lons2, hits2)
         lons3 = checkLons(lons3, hits3)
         lons4 = checkLons(lons4, hits4)
+    #: --- Plot ---
+    #
+    print('Plot 2D Histograms - height')
+    for ctyp in ['all', 'cld', 'cld_thin', 'clr']:
+        if ctyp == 'all':
+            title_org = '2D Age - Hits pixels'
+            figname_org = '%s/2dhist_height_hits_all' %plotDir
+            inds_org = hits
+            vmax = 100000
+        elif ctyp == 'cld':
+            title_org = '2D Age - Hits and Cloudy pixels'
+            figname_org = '%s/2dhist_height_hits_cld' %plotDir
+            inds_org = hits_cld
+            vmax = 100000
+        elif ctyp == 'cld_thin':
+            title_org = '2D Age - Hits and Thin Cloudy pixels'
+            figname_org = '%s/2dhist_height_hits_cld_thin' %plotDir
+            inds_org = hits_cldt
+            vmax = 10000
+        elif ctyp == 'clr':
+            title_org = '2D Hist - Hits and Clear pixels'
+            figname_org = '%s/2dhist_height_hits_clr' %plotDir
+            inds_org = hits_clr
+            vmax = 50000
+        inds = inds_org
+        figname = figname_org
+        title = title_org
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        hh = ax.hist2d(age[inds] / 86400, catalog['height'][inds], bins=[100, 10], vmin=0, vmax=vmax)#, bins=400)
+        ax.set_ylabel('Height')
+        ax.set_xlabel('Age [days]')
+        ax.set_title(title)
+        fig.subplots_adjust(right=0.89)
+        # cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
+        cbar = fig.colorbar(hh[3])#, cax=cbar_ax)
+        fig.savefig(figname + '.png')
+    pdb.set_trace()
     
     #: https://stackoverflow.com/questions/50611018/cartopy-heatmap-over-openstreetmap-background/50638691
     heightBoundaries = [[None, None], [14,16], [16, 18], [18,20]]
@@ -879,36 +916,6 @@ if __name__ == '__main__':
             plt.close(fig)
     
     
-    
-    for ctyp in ['all', 'cld', 'cld_thin', 'clr']:
-        if ctyp == 'all':
-            title_org = '2D Age - Hits pixels'
-            figname_org = '%s/2dhist_age_hots_all' %plotDir
-            inds_org = hits
-        elif ctyp == 'cld':
-            title_org = '2D Age - Hits and Cloudy pixels'
-            figname_org = '%s/2dhist_age_hits_cld' %plotDir
-            inds_org = hits_cld
-        elif ctyp == 'cld_thin':
-            title_org = '2D Age - Hits and Thin Cloudy pixels'
-            figname_org = '%s/2dhist_age_hits_cld_thin' %plotDir
-            inds_org = hits_cldt
-        elif ctyp == 'clr':
-            title_org = '2D Hist - Hits and Clear pixels'
-            figname_org = '%s/2dhist_age_hits_clr' %plotDir
-            inds_org = hits_clr
-        inds = inds_org
-        figname = figname_org
-        title = title_org
-        #: --- Plot ---
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        hh = ax.hist2d(age[inds] / 86400, catalog['height'][inds], bins=[50, 50])#, bins=400)
-        ax.set_yscale('Height')
-        ax.set_xlabel('Age [days]')
-        ax.set_title(title)
-        fig.savefig(figname + '.png')
-    pdb.set_trace()
     
 #     hh1, xedges1, yedges1 = np.histogram2d(lons[hits], lats[hits], bins=[180, 90])
 #     hh2, xedges2, yedges2 = np.histogram2d(lons_0[hits], lats_0[hits], bins=[180, 90])#, bins=400)#, density=True)
