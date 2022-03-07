@@ -17,13 +17,13 @@ import numpy as np
 import os
 import sys
 import pdb
-from datetime import datetime, timedelta
+import datetime
 import time
 import psutil
 
 
-from analyseTraczilla import getConvfiles, I_HIT, I_OLD
-
+from analyseTraczilla import getConvfiles, I_HIT, I_OLD, readCatalogFile
+from convsrcErikFullGridSatTropo import satratio
 
 sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
 from io107 import readpart107, readidx107
@@ -49,24 +49,48 @@ if __name__ == '__main__':
         for mon in months:
             outname = 'CALIOP-EAD-%d%02d-n-DD' %(year, mon)
             partDir = os.path.join('/proju/flexpart/flexpart_in/EKJ/ejohansson/flexout/STC/Calipso', outname)
-    
+            # te = readCatalogFile(partDir + '/Initfiles/selDardar_Calalog-200701-n.pkl')
+            #: Read out file
             rvs, fls, age, lons, lats, temp, pres = getConvfiles(outDir, [outname])
             hits = (fls & I_HIT) == I_HIT
+            all_inds = np.ones(hits.shape).astype(bool)
+            #: Read part_000 file
             f0 = os.path.join(partDir, 'part_000')
             part0 = readidx107(f0, quiet=True)
-            step = 3
-            hmax = 3240 #1800 #: 75 days (75 * 24 = 1800)
-            qs_min = np.zeros([2, hits.sum()])
-            qs_min[0, :] = part0['p'][hits]
-            pMin = qs_min.copy()
-            
+            #: Calc saturation
+            rvs0 = satratio(part0['p'], part0['t'])
+            #: get the desired variables and put in a 2D array
+            pMin = np.zeros([2, hits.sum()])
+            pMin[0, :] = part0['p'][hits]
+            rvsMin = np.zeros([2, hits.shape[0]])
+            rvsMin[0, :] = rvs0
             #hmax = 18
-            dstep = timedelta(hours=step)
+            step = 3
+            hmax = 1800#3240 #1800 #: 75 days (75 * 24 = 1800)
+            dstep = datetime.timedelta(hours=step)
             for phour in range(step, hmax + 1, step):
-                # if phour < 720:
+                # if phour < 1749:
                 #     continue
                 tic = time.time()
-                partf = readidx107(f0.replace('part_000', 'part_%03d' %phour), quiet=True)
+                #: Read part_xxx file
+                partfile = f0.replace('part_000', 'part_%03d' %phour)
+                if not os.path.isfile(partfile + '.gz'):
+                    print("No such file")
+                    print(partfile)
+                    print('')
+                    continue
+                partf = readidx107(partfile, quiet=True)
+                print("Read time = %.02f s" %(time.time() - tic))
+                if len(partf['idx_back']) == 0:
+                    continue
+                #: Calc saturation
+                rvsf = satratio(partf['p'], partf['t'])
+                #: Check memory
+                pid = os.getpid()
+                py = psutil.Process(pid)
+                memoryUse = py.memory_info()[0]/2**30
+                print('memory use: {:4.2f} gb'.format(memoryUse))
+                print('')
                 # temp_full = np.zeros(part0['idx_back'].shape[0]) + np.nan
                 # pinds = partf['idx_back']-1
                 # temp_full[pinds] = partf['p']
@@ -75,8 +99,11 @@ if __name__ == '__main__':
                 # # qs_min[1,:][n_nan_inds] = np.where(np.nanargmin((qs_min[0,:][n_nan_inds], temp_full[hits][n_nan_inds]), axis=0) == 1, phour, qs_min[1,:][n_nan_inds])
                 # qs_min[1,:] = np.where(np.nanargmin((qs_min[0,:], temp_full[hits]), axis=0) == 1, phour, qs_min[1,:])
                 # qs_min[0,:] = p_min
-                pMin = findMin(pMin, part0['idx_back']-1, partf['idx_back']-1, hits, partf['p'], phour)
-                print(time.time() - tic)
+                #: Find Min
+                rvsMin = findMin(rvsMin, part0['idx_back']-1, partf['idx_back']-1, all_inds, rvsf, phour)
+                # pMin = findMin(pMin, part0['idx_back']-1, partf['idx_back']-1, hits, partf['p'], phour)
+                print("Calc time = %.02f s" %(time.time() - tic))
+                #: Check memory
                 pid = os.getpid()
                 py = psutil.Process(pid)
                 memoryUse = py.memory_info()[0]/2**30
@@ -86,5 +113,5 @@ if __name__ == '__main__':
                 # inds = np.searchsorted(part0['idx_back'][hits], mi)
                 # pdb.set_trace()
             # f2r = f2.replace('.gz', '')
-    print("total time = %d s" %(time.time() - ticT))
+    print("total time = %.02f s" %(time.time() - ticT))
     pdb.set_trace()
