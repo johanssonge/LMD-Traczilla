@@ -29,6 +29,7 @@ import flammkuchen as fk  # @UnresolvedImport
 from scipy.interpolate import RegularGridInterpolator  # @UnresolvedImport
 import pdb
 import time
+from createFlexpartFiles import max_life_time
 
 sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
 from ECMWF_N import ECMWF  # @UnresolvedImport
@@ -121,7 +122,7 @@ def main():
 
     """ Parameters """
     step = args.step
-    hmax = 3240 #1800 #: 75 days (75 * 24 = 1800)
+    hmax = 5640 #1800 #: 75 days (75 * 24 = 1800)
     #hmax = 18
     dstep = timedelta(hours=step)
     # time width of the parcel slice
@@ -136,7 +137,9 @@ def main():
     #day2=31
     #: Age bound, Just smaller than tracilla max_life_time=42
     # age_bound = 41.75
-    age_bound = 99.75
+
+    age_bound = max_life_time - 0.25 #199.75
+    print(age_bound)
     advect = 'EAD'
     suffix =''
     quiet = False
