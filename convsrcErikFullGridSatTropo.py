@@ -71,7 +71,219 @@ blacklist = []
 #%%
 """@@@@@@@@@@@@@@@@@@@@@@@@   MAIN   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"""
 
-def main():
+# def main():
+
+#%%
+def satratio(p,T):
+    """ Calculate the volume saturation ratio from pressure (in Pa) and temperature 
+    (in K). Output in ppmv 
+    usual factor 0.622 must be applied to get mass mixing ratio
+    estar is in hPa """
+    estar = 1.0008*np.exp(23.33086-(6111.72784/T)+0.15215*np.log(T))
+    satr = 1.0021 * estar/(0.01*p-estar)
+    return satr    
+vsatratio = np.vectorize(satratio)
+
+#%%
+""" Functions related to the parcel data """
+
+def get_slice_part(part_a,part_p,live_a,live_p,current_date,dstep,slice_width):
+    """ Generator to generate 5' slices along flight track """
+    nb_slices = int(dstep/slice_width)
+    ta = current_date + dstep
+    tp = current_date
+    tf = ta
+    empty_live = (live_a.sum() == 0)
+    for i in range(nb_slices):  # @UnusedVariable
+        ti = tf- slice_width
+        # note that 0.5*(ti+tf) cannot be calculated as we are adding two dates
+        tmid = ti+0.5*(tf-ti)
+        coefa = (tmid-tp)/dstep
+        coefp = (ta-tmid)/dstep
+        dat = {}
+        dat['time'] = tmid
+        if empty_live:
+            dat['idx_back'] = dat['x'] = dat['y'] = dat['p'] = dat['t'] = []
+            dat['itime']= None
+        else:
+            dat['idx_back'] = part_a['idx_back'][live_a]
+            dat['x'] = coefa*part_a['x'][live_a] + coefp*part_p['x'][live_p]
+            dat['y'] = coefa*part_a['y'][live_a] + coefp*part_p['y'][live_p]
+            dat['p'] = coefa*part_a['p'][live_a] + coefp*part_p['p'][live_p]
+            dat['t'] = coefa*part_a['t'][live_a] + coefp*part_p['t'][live_p]
+            dat['itime'] = int(coefa*part_a['itime'] + coefp*part_p['itime'])
+
+        tf -= slice_width
+        yield dat
+
+#%%
+""" Function managing the exiting parcels """
+
+@jit(nopython=True)
+def exiter(itime, x,y,p,t,idx_back, flag,xc,yc,pc,tc,age, ir_start, rr):
+    nexits = 0
+    for i in range(len(x)):
+        i0 = idx_back[i]-IDX_ORGN
+        if flag[i0] & I_DEAD == 0:
+            nexits += 1
+            xc[i0] = x[i]
+            yc[i0] = y[i]
+            tc[i0] = t[i]
+            pc[i0] = p[i]
+            age[i0] = ir_start[i0] - itime
+            #if   y[i] < rr[1,0] + 4.: excode = 6
+            #elif x[i] < rr[0,0] + 4.: excode = 3
+            #elif y[i] > rr[1,1] - 4.: excode = 4
+            #elif x[i] > rr[0,1] - 4.: excode = 5
+            if p[i] > highpcut - 150: excode = 1
+            elif p[i] < lowpcut  + 15 : excode = 2
+            else:                   excode = 7
+            flag[i0] |= (excode << 13) + I_DEAD + I_CROSSED
+    return nexits
+
+#%%
+""" Function doing the comparison between parcels and clouds and setting the result field 
+In this version, we check only whether the temperature is warmer than the brightness temperature
+from the infrared window. """
+
+@jit(nopython=True)
+def convbirth(itime, x,y,p,t,idx_back, flag,ptrop, xc,yc,pc,tc,age, BT, ir_start, x0,y0,stepx,stepy,binx,biny):
+    nhits = 0
+    for i in range(len(x)):
+        # do not consider parcels as long as they are above the cold point
+        if ptrop[i] > p[i]: continue 
+        idx = min(int(np.floor((x[i]-x0)/stepx)),binx-1)
+        idy = min(int(np.floor((y[i]-y0)/stepy)),biny-1)
+        if BT[idy,idx] < t[i]:
+            i0 = idx_back[i]-IDX_ORGN
+            if flag[i0] & I_DEAD == 0:
+                nhits += 1
+                flag[i0] |= I_HIT + I_DEAD
+                xc[i0] = x[i]
+                yc[i0] = y[i]
+                tc[i0] = t[i]
+                pc[i0] = p[i]
+                age[i0] = ir_start[i0] - itime
+    return nhits
+
+#%%
+""" Function related to satellite read """
+
+def read_sat(t0,dtRange,pre=False,vshift=0):
+    """ Generator reading the satellite data.
+    The loop is infinite; sat data are called when required until the end of
+    the parcel loop. """
+    # initial time for internal loop
+    current_time = t0
+    while True:        
+        try:
+            if (current_time in blacklist): raise BlacklistError()
+            # defining a new object is necessary to avoid messing dat if an error occurs
+            dat0 = geosat.GridSat(current_time)
+            dat0._get_IR0()
+            dat0.var['IR0'][dat0.var['IR0']<0] = 9999
+            dat0.close()
+            # remove dat and make it a view of dat0, try to avoid errors on first attempt
+            print('read GridSat for ',current_time)
+            try:
+                del dat
+            except:
+                pass # intended for the first pass when dat undefined
+            # Make shift below if needed, presently shift not used 
+            # Start shift at 10
+            if vshift == 10:
+                # make temperatures colder by 5K, approximately +1km
+                dat0.var['IR0'] -= 5
+            dat = dat0
+            if pre:
+                dat.tf = current_time + dtRange
+                dat.ti = current_time
+            else:
+                dat.tf = current_time
+                dat.ti = current_time - dtRange
+        except BlacklistError:
+            print('blacklisted date for GridSat',current_time)
+            # extend the lease while keeping the old dat
+            dat.ti -= dtRange
+        except FileNotFoundError:
+            print('GridSat file not found ',current_time)
+            # extend the lease while keeping the old dat
+            dat.ti -= dtRange
+        current_time -= dtRange
+        
+        yield dat
+        
+def read_ERA5(t0,dtRange,pre=False,vshift=0):
+    """ Generator reading the ERA5 data.
+    The loop is infinite; ERA5 data are called when required until the end of
+    the parcel loop. 
+    The output contain a function that gives the pressure of the tropo^pause as
+    a function of lon and lat in the FullAMA domain"""
+    # initial time for internal loop
+    current_time = t0
+    while True:
+        try:
+            if (current_time in blacklist): raise BlacklistError()
+            # defining a new object is necessary to avoid messing dat if an error occurs
+            dat = ECMWF('FULL-EA',current_time)
+            dat._get_T()
+            dat._mkp()
+            dats = dat.shift2west(-180)
+            # extraction in a domain that encompasses FullAMA
+            datr0 = dats.extract(latRange=[-50,50],varss=['P','T'])
+            del dat, dats
+            print('get ERA5 tropopause for ',current_time)
+            usePcold = False
+            if usePcold:
+                print("Use coldpoint tropopause")
+                datr0._CPT()
+                # add a right column to 'pcold'
+                ptropp = np.append(datr0.d2d['pcold'].T,[datr0.d2d['pcold'][:,0]],0).T
+            else:
+                print("Use WMO tropopause")
+                datr0._WMO()
+                ptropp = np.append(datr0.d2d['pwmo'].T,[datr0.d2d['pwmo'][:,0]],0).T
+            datr0.fP = RegularGridInterpolator((np.arange(-50,51), np.arange(-180,181)), ptropp, bounds_error=True)
+            try:
+                del datr
+            except:
+                pass # intended for the first pass when datr undefined
+            datr = datr0 # datr as a view of datr0
+            # We reproduce here the same sequence as for the satellite file
+            # although perhapsnot appropriate (the ERA5 data are instantaneous)             
+            if pre:
+                datr.tf = current_time + dtRange
+                datr.ti = current_time
+            else:
+                datr.tf = current_time
+                datr.ti = current_time - dtRange
+        except BlacklistError:
+            print('blacklisted date for GridSat',current_time)
+            # extend the lease while keeping the old dat
+            datr.ti -= dtRange
+        except FileNotFoundError:
+            print('ERA5 file not found ',current_time)
+            # extend the lease while keeping the old dat
+            datr.ti -= dtRange
+        current_time -= dtRange
+
+        yield datr
+
+def check(dat,t):
+        # check that the zone is not expired
+    try:
+        test = (t > dat.ti) and (t <= dat.tf)
+    # Exception for the first usage when the time keys are not defined
+    except KeyError:
+        print('check KeyError')
+        test = False
+    except AttributeError:
+        print('check AttributeError')
+        test = False
+    return test
+#
+
+if __name__ == '__main__':
     global IDX_ORGN
     parser = argparse.ArgumentParser()
     parser.add_argument("-d","--use_dardar", action='store_true', default = False, 
@@ -535,215 +747,10 @@ def main():
 
 """@@@@@@@@@@@@@@@@@@@@@@@@@@@ END OF MAIN @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"""
 
-#%%
-def satratio(p,T):
-    """ Calculate the volume saturation ratio from pressure (in Pa) and temperature 
-    (in K). Output in ppmv 
-    usual factor 0.622 must be applied to get mass mixing ratio
-    estar is in hPa """
-    estar = 1.0008*np.exp(23.33086-(6111.72784/T)+0.15215*np.log(T))
-    satr = 1.0021 * estar/(0.01*p-estar)
-    return satr    
-vsatratio = np.vectorize(satratio)
-
-#%%
-""" Functions related to the parcel data """
-
-def get_slice_part(part_a,part_p,live_a,live_p,current_date,dstep,slice_width):
-    """ Generator to generate 5' slices along flight track """
-    nb_slices = int(dstep/slice_width)
-    ta = current_date + dstep
-    tp = current_date
-    tf = ta
-    empty_live = (live_a.sum() == 0)
-    for i in range(nb_slices):  # @UnusedVariable
-        ti = tf- slice_width
-        # note that 0.5*(ti+tf) cannot be calculated as we are adding two dates
-        tmid = ti+0.5*(tf-ti)
-        coefa = (tmid-tp)/dstep
-        coefp = (ta-tmid)/dstep
-        dat = {}
-        dat['time'] = tmid
-        if empty_live:
-            dat['idx_back'] = dat['x'] = dat['y'] = dat['p'] = dat['t'] = []
-            dat['itime']= None
-        else:
-            dat['idx_back'] = part_a['idx_back'][live_a]
-            dat['x'] = coefa*part_a['x'][live_a] + coefp*part_p['x'][live_p]
-            dat['y'] = coefa*part_a['y'][live_a] + coefp*part_p['y'][live_p]
-            dat['p'] = coefa*part_a['p'][live_a] + coefp*part_p['p'][live_p]
-            dat['t'] = coefa*part_a['t'][live_a] + coefp*part_p['t'][live_p]
-            dat['itime'] = int(coefa*part_a['itime'] + coefp*part_p['itime'])
-
-        tf -= slice_width
-        yield dat
-
-#%%
-""" Function managing the exiting parcels """
-
-@jit(nopython=True)
-def exiter(itime, x,y,p,t,idx_back, flag,xc,yc,pc,tc,age, ir_start, rr):
-    nexits = 0
-    for i in range(len(x)):
-        i0 = idx_back[i]-IDX_ORGN
-        if flag[i0] & I_DEAD == 0:
-            nexits += 1
-            xc[i0] = x[i]
-            yc[i0] = y[i]
-            tc[i0] = t[i]
-            pc[i0] = p[i]
-            age[i0] = ir_start[i0] - itime
-            #if   y[i] < rr[1,0] + 4.: excode = 6
-            #elif x[i] < rr[0,0] + 4.: excode = 3
-            #elif y[i] > rr[1,1] - 4.: excode = 4
-            #elif x[i] > rr[0,1] - 4.: excode = 5
-            if p[i] > highpcut - 150: excode = 1
-            elif p[i] < lowpcut  + 15 : excode = 2
-            else:                   excode = 7
-            flag[i0] |= (excode << 13) + I_DEAD + I_CROSSED
-    return nexits
-
-#%%
-""" Function doing the comparison between parcels and clouds and setting the result field 
-In this version, we check only whether the temperature is warmer than the brightness temperature
-from the infrared window. """
-
-@jit(nopython=True)
-def convbirth(itime, x,y,p,t,idx_back, flag,ptrop, xc,yc,pc,tc,age, BT, ir_start, x0,y0,stepx,stepy,binx,biny):
-    nhits = 0
-    for i in range(len(x)):
-        # do not consider parcels as long as they are above the cold point
-        if ptrop[i] > p[i]: continue 
-        idx = min(int(np.floor((x[i]-x0)/stepx)),binx-1)
-        idy = min(int(np.floor((y[i]-y0)/stepy)),biny-1)
-        if BT[idy,idx] < t[i]:
-            i0 = idx_back[i]-IDX_ORGN
-            if flag[i0] & I_DEAD == 0:
-                nhits += 1
-                flag[i0] |= I_HIT + I_DEAD
-                xc[i0] = x[i]
-                yc[i0] = y[i]
-                tc[i0] = t[i]
-                pc[i0] = p[i]
-                age[i0] = ir_start[i0] - itime
-    return nhits
-
-#%%
-""" Function related to satellite read """
-
-def read_sat(t0,dtRange,pre=False,vshift=0):
-    """ Generator reading the satellite data.
-    The loop is infinite; sat data are called when required until the end of
-    the parcel loop. """
-    # initial time for internal loop
-    current_time = t0
-    while True:        
-        try:
-            if (current_time in blacklist): raise BlacklistError()
-            # defining a new object is necessary to avoid messing dat if an error occurs
-            dat0 = geosat.GridSat(current_time)
-            dat0._get_IR0()
-            dat0.var['IR0'][dat0.var['IR0']<0] = 9999
-            dat0.close()
-            # remove dat and make it a view of dat0, try to avoid errors on first attempt
-            print('read GridSat for ',current_time)
-            try:
-                del dat
-            except:
-                pass # intended for the first pass when dat undefined
-            # Make shift below if needed, presently shift not used 
-            # Start shift at 10
-            if vshift == 10:
-                # make temperatures colder by 5K, approximately +1km
-                dat0.var['IR0'] -= 5
-            dat = dat0
-            if pre:
-                dat.tf = current_time + dtRange
-                dat.ti = current_time
-            else:
-                dat.tf = current_time
-                dat.ti = current_time - dtRange
-        except BlacklistError:
-            print('blacklisted date for GridSat',current_time)
-            # extend the lease while keeping the old dat
-            dat.ti -= dtRange
-        except FileNotFoundError:
-            print('GridSat file not found ',current_time)
-            # extend the lease while keeping the old dat
-            dat.ti -= dtRange
-        current_time -= dtRange
-        
-        yield dat
-        
-def read_ERA5(t0,dtRange,pre=False,vshift=0):
-    """ Generator reading the ERA5 data.
-    The loop is infinite; ERA5 data are called when required until the end of
-    the parcel loop. 
-    The output contain a function that gives the pressure of the tropo^pause as
-    a function of lon and lat in the FullAMA domain"""
-    # initial time for internal loop
-    current_time = t0
-    while True:
-        try:
-            if (current_time in blacklist): raise BlacklistError()
-            # defining a new object is necessary to avoid messing dat if an error occurs
-            dat = ECMWF('FULL-EA',current_time)
-            dat._get_T()
-            dat._mkp()
-            dats = dat.shift2west(-180)
-            # extraction in a domain that encompasses FullAMA
-            datr0 = dats.extract(latRange=[-50,50],varss=['P','T'])
-            del dat, dats
-            print('get ERA5 tropopause for ',current_time)
-            usePcold = False
-            if usePcold:
-                print("Use coldpoint tropopause")
-                datr0._CPT()
-                # add a right column to 'pcold'
-                ptropp = np.append(datr0.d2d['pcold'].T,[datr0.d2d['pcold'][:,0]],0).T
-            else:
-                print("Use WMO tropopause")
-                datr0._WMO()
-                ptropp = np.append(datr0.d2d['pwmo'].T,[datr0.d2d['pwmo'][:,0]],0).T
-            datr0.fP = RegularGridInterpolator((np.arange(-50,51), np.arange(-180,181)), ptropp, bounds_error=True)
-            try:
-                del datr
-            except:
-                pass # intended for the first pass when datr undefined
-            datr = datr0 # datr as a view of datr0
-            # We reproduce here the same sequence as for the satellite file
-            # although perhapsnot appropriate (the ERA5 data are instantaneous)             
-            if pre:
-                datr.tf = current_time + dtRange
-                datr.ti = current_time
-            else:
-                datr.tf = current_time
-                datr.ti = current_time - dtRange
-        except BlacklistError:
-            print('blacklisted date for GridSat',current_time)
-            # extend the lease while keeping the old dat
-            datr.ti -= dtRange
-        except FileNotFoundError:
-            print('ERA5 file not found ',current_time)
-            # extend the lease while keeping the old dat
-            datr.ti -= dtRange
-        current_time -= dtRange
-
-        yield datr
-
-def check(dat,t):
-        # check that the zone is not expired
-    try:
-        test = (t > dat.ti) and (t <= dat.tf)
-    # Exception for the first usage when the time keys are not defined
-    except KeyError:
-        print('check KeyError')
-        test = False
-    except AttributeError:
-        print('check AttributeError')
-        test = False
-    return test
-#
-
-if __name__ == '__main__':
-    main()
+    
+    
+    # main()
+    
+    
+    
+    
