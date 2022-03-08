@@ -476,11 +476,11 @@ if __name__ == '__main__':
     ekjDir = '/proju/flexpart/flexpart_in/EKJ/ejohansson'
     mainDir = '%s/flexout/STC/Calipso' %ekjDir
     outDir = '%s/flexout/STC/Calipso-OUT' %datPath
-    plotDir = '%s/LMD-Traczilla/Plots' %scrPath
+    plotDir = '%s/LMD-Traczilla/Plots' %ekjDir
     
     compare = False
     year = [2007]
-    month = [1]
+    month = [11]
     #month = [*range(1, 13)]
     dn = 'n'
     useDardar = True
@@ -505,7 +505,7 @@ if __name__ == '__main__':
     tic = time.time()
     rvs, fls, age, lons, lats, temp, pres = getConvfiles(outDir, outnames, lt=lt)
     print('It took %d sec to read Conv-files' %(time.time() - tic))
-    
+    pdb.set_trace()
     # print(time.time() - tic)
     olds = (fls & I_OLD) == I_OLD
     hits = (fls & I_HIT) == I_HIT
@@ -600,7 +600,7 @@ if __name__ == '__main__':
     pdb.set_trace()
     
     #: https://stackoverflow.com/questions/50611018/cartopy-heatmap-over-openstreetmap-background/50638691
-    heightBoundaries = [[None, None], [14,16], [16, 18], [18,20]]
+    heightBoundaries = [[None, None], [14,16], [16, 18], [18, 20], [18,19], [19,20]]
     print('Plot Age Histograms')
     for ctyp in ['all', 'cld', 'cld_thin', 'clr']:
         if ctyp == 'all':
