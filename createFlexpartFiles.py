@@ -21,6 +21,19 @@ import datetime
 from dateutil.relativedelta import relativedelta  # @UnresolvedImport
 import shutil
 
+#: ---------------------------------------------------------------
+max_life_time = 200
+
+#: ---------------------------------------------------------------
+
+def rmfile(fn):
+    if os.path.islink(fn):
+        os.unlink(fn)
+    elif os.path.isfile(fn):
+        os.remove(fn)
+
+#: ---------------------------------------------------------------
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
@@ -44,8 +57,8 @@ if __name__ == '__main__':
     #: Day / night / 24h
     dnf = args.night
     startDate = datetime.datetime(year, mon, 1, 0, 0) + relativedelta(months=1)
-    max_life_time = 100
-    endDate = startDate - relativedelta(days=135) #: = max_life_time + >31 (~35)
+    
+    endDate = startDate - relativedelta(days=235) #: = max_life_time + >31 (~35)
 
     # year_p1 = startDate.year
     # mon_p1 = startDate.month
@@ -170,6 +183,7 @@ if __name__ == '__main__':
         
         #: Create do-file
         print(dofn)
+        rmfile(dofn)
         dof = open(dofn, 'w')
         dof.writelines('#!/bin/bash \n')
         dof.writelines('#PBS -q days3 \n')
@@ -192,7 +206,9 @@ if __name__ == '__main__':
             print('%s/AVAILABLE-%d-uvwt \n' %(availDir, year))
             print('%s/AVAILABLE-%d-hr \n' %(availDir, year))
             sys.exit()
+        #: Create path-file
         print(pathfn)
+        rmfile(pathfn)
         pathf = open(pathfn, 'w')
     #     pathf.writelines('/home/ejohansson/Projects/flexpart/traczilla/options/STC/Calipso/CALIOP-EAD-Jul2008/ \n')
         pathf.writelines('%s/ \n' %optPath)
@@ -203,8 +219,31 @@ if __name__ == '__main__':
         pathf.writelines('%s/AVAILABLE-%d-hr \n' %(availDir, year))
         pathf.close()
         
-
+        #: Create releas-file
+        print(releasfn)
+        rmfile(releasfn)
+        releasf = open(releasfn, 'w')
+        releasf.writelines("#RELEASES\n")
+        releasf.writelines("#************************************************************************\n")
+        releasf.writelines("#                                                                       *\n")
+        releasf.writelines("#   Input file for the Lagrangian particle dispersion model TRACZILLA   *\n")
+        releasf.writelines("#                        Please select your option    *\n")
+        releasf.writelines("#                                                                       *\n")
+        releasf.writelines("#************************************************************************\n")
+        releasf.writelines("&StratoClim\n")
+        releasf.writelines("pcut=50000\n")
+        releasf.writelines("plowcut=50\n")
+        releasf.writelines("NearRealTime=.false.\n")
+        releasf.writelines("startfrom0=.true.\n")
+        releasf.writelines("setxylim=.false.\n")
+        releasf.writelines("max_life_time=%d\n" %max_life_time)
+        releasf.writelines("&END\n")
+        # releasf.writelines("\n")
+        releasf.close()
+        
+    #: Create command-file
     print(commandfn)
+    rmfile(commandfn)
     commandf = open(commandfn, 'w')
     commandf.writelines("# COMMAND\n")
     commandf.writelines("#*******************************************************************************\n")
@@ -244,26 +283,6 @@ if __name__ == '__main__':
     commandf.writelines(" &END\n")
     commandf.writelines("\n")
     commandf.close()
-    
-    print(releasfn)
-    releasf = open(releasfn, 'w')
-    releasf.writelines("#RELEASES\n")
-    releasf.writelines("#************************************************************************\n")
-    releasf.writelines("#                                                                       *\n")
-    releasf.writelines("#   Input file for the Lagrangian particle dispersion model TRACZILLA   *\n")
-    releasf.writelines("#                        Please select your option    *\n")
-    releasf.writelines("#                                                                       *\n")
-    releasf.writelines("#************************************************************************\n")
-    releasf.writelines("&StratoClim\n")
-    releasf.writelines("pcut=50000\n")
-    releasf.writelines("plowcut=50\n")
-    releasf.writelines("NearRealTime=.false.\n")
-    releasf.writelines("startfrom0=.true.\n")
-    releasf.writelines("setxylim=.false.\n")
-    releasf.writelines("max_life_time=%d\n" %max_life_time)
-    releasf.writelines("&END\n")
-    # releasf.writelines("\n")
-    releasf.close()
     print(resultDir)
     
     if args.qsub:
