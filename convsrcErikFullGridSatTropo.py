@@ -30,6 +30,7 @@ from scipy.interpolate import RegularGridInterpolator  # @UnresolvedImport
 import pdb
 import time
 from createFlexpartFiles import max_life_time
+import glob
 
 sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
 from ECMWF_N import ECMWF  # @UnresolvedImport
@@ -81,7 +82,7 @@ def satratio(p,T):
     estar is in hPa """
     estar = 1.0008*np.exp(23.33086-(6111.72784/T)+0.15215*np.log(T))
     satr = 1.0021 * estar/(0.01*p-estar)
-    return satr    
+    return satr
 vsatratio = np.vectorize(satratio)
 
 #%%
@@ -283,8 +284,26 @@ def check(dat,t):
     return test
 #
 
+def findLastFile(dn):
+    fs = glob.glob("%s/part_*" %dn)
+    fs.sort()
+    i = -1
+    for f in fs:
+        i = i + 1
+        num = int(os.path.basename(f).replace('.gz', '').split('_')[-1])
+        if i == 0:
+            stp0 = num
+        elif i == 1:
+            stp = num - stp0
+        if i == 0:
+            maxnum = 0
+        else:
+            maxnum = np.max((maxnum, num))
+    return maxnum, stp
+    
+    
 if __name__ == '__main__':
-    global IDX_ORGN
+    # global IDX_ORGN
     parser = argparse.ArgumentParser()
     parser.add_argument("-d","--use_dardar", action='store_true', default = False, 
                         help = "Use DARDAR data")
@@ -334,8 +353,8 @@ if __name__ == '__main__':
 
     """ Parameters """
     step = args.step
-    hmax = 5640 #1800 #: 75 days (75 * 24 = 1800)
-    #hmax = 18
+    # hmax =  1800 #: 75 days (75 * 24 = 1800)
+    hmax = 5640 #: 235 days (235 * 24 = 5640)
     dstep = timedelta(hours=step)
     # time width of the parcel slice
     slice_width = timedelta(minutes=5)
@@ -351,7 +370,7 @@ if __name__ == '__main__':
     # age_bound = 41.75
 
     age_bound = max_life_time - 0.25 #199.75
-    print(age_bound)
+    print('age_bound = %f' %age_bound)
     advect = 'EAD'
     suffix =''
     quiet = False
@@ -431,6 +450,16 @@ if __name__ == '__main__':
     bak_file_params = os.path.join(out_dir,outnames +'-K-backup-params.h5')
 
     """ Initialization of the calculation """
+    #: Control hmax and step
+    emax, estep = findLastFile(ftraj)
+    if (emax != hmax) or (estep != step):
+        print('There is a mish mash')
+        print('hmax = %d' %hmax)
+        print('emax = %d' %emax)
+        print('step = %d' %step)
+        print('extep = %d' %estep)
+        sys.exit()
+    pdb.set_trace()
     # Initialize the dictionary of the parcel dictionaries
     partStep={}
     # initialize a grid that will be used to before actually doing any read
@@ -498,8 +527,8 @@ if __name__ == '__main__':
             # start_from_begin = False
         except:
             print('cannot load backup')
-            return -1
-        
+            # return -1
+            sys.exit()
         
         [offset, nhits, nexits, nold, ndborne, nnew, new, current_date] = params['params']
         partStep[offset] = readpart107(offset,ftraj,quiet=True)
