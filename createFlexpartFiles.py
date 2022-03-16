@@ -290,5 +290,7 @@ if __name__ == '__main__':
         print("Submitt qsub")
         print(cmd)
         c1 = os.system(cmd)
+    else:
+        pdb.set_trace()
     
-    pdb.set_trace()
+    
