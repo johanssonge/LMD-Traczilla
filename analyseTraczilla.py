@@ -202,18 +202,19 @@ def readConvFile(fn, usefk=False):
     return rvs, fls, age, lons, lats, temp, pres
 
 
-def getCatalogFile(fn, p0=None):
-    tf = '/data/ejohansson/flexout/STC/Calipso/CALIOP-EAD/Catalog/%s' %os.path.basename(fn)
+def getCatalogFile(fn, p0=None, checkForNewFile=True):
     
     objects = readCatalogFile(fn)
-    if os.path.isfile(tf):
-        to = readCatalogFile(tf)
-        compareFiles(objects, fn, to, tf, 0)
+    if checkForNewFile:
+        tf = '/data/ejohansson/flexout/STC/Calipso/CALIOP-EAD/Catalog/%s' %os.path.basename(fn)
+        if os.path.isfile(tf):
+            to = readCatalogFile(tf)
+            compareFiles(objects, fn, to, tf, 0)
     
     nameDic = {'CM': 'Cloud_Mask', 'TpH': 'Tropopause_Height', \
                 'SZA': 'SZA', 'SC': 'Simplified_Categorization', \
                 'lensel': 'lensel', 'npart': 'npart', 'vod': 'vis_optical_depth', \
-                'height': 'Track_Height'}
+                'height': 'Track_Height', 'iwc': 'iwc'}
     retv = {}
     for rn in nameDic.keys():
         retv.update({rn: np.array([])})
@@ -324,7 +325,7 @@ def getInitfiles(mD, years, months, dn, uD, lt=True):
                 paramFile = os.path.join(initDir, paramname)
                 catalFile = os.path.join(initDir, catalogname)
                 pf = readidx107(os.path.join(trajDir,'part_000'),quiet=False)
-                cf = getCatalogFile(catalFile, pf)
+                cf = getCatalogFile(catalFile, pf, checkForNewFile=False)
                 mf = readParamFile(paramFile)
                 pf['x'] = np.where(pf['x'] > 180, pf['x'] - 360, pf['x'])
                 if i == 0:
@@ -505,8 +506,6 @@ if __name__ == '__main__':
     tic = time.time()
     rvs, fls, age, lons, lats, temp, pres = getConvfiles(outDir, outnames, lt=lt)
     print('It took %d sec to read Conv-files' %(time.time() - tic))
-    pdb.set_trace()
-    # print(time.time() - tic)
     olds = (fls & I_OLD) == I_OLD
     hits = (fls & I_HIT) == I_HIT
     
@@ -597,7 +596,6 @@ if __name__ == '__main__':
         # cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
         cbar = fig.colorbar(hh[3])#, cax=cbar_ax)
         fig.savefig(figname + '.png')
-    pdb.set_trace()
     
     #: https://stackoverflow.com/questions/50611018/cartopy-heatmap-over-openstreetmap-background/50638691
     heightBoundaries = [[None, None], [14,16], [16, 18], [18, 20], [18,19], [19,20]]
