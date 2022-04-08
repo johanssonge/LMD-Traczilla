@@ -121,11 +121,12 @@ def readDARDAR(fname, dn):
             
             ddvod = ddncf.variables['vis_optical_depth'][:].data #: 1D
             ddiwc = ddncf.variables['iwc'][:].data #: 2D
+            iwcnt = np.sum(ddiwc>0, axis=1)
             ddncf.close()
         else:
             ddvod = np.zeros(lats.shape) + np.nan
             ddiwc = np.zeros(dsc.shape) + np.nan
-        extras.update({'vis_optical_depth': ddvod, 'iwc': ddiwc})
+        extras.update({'vis_optical_depth': ddvod, 'iwc': ddiwc, 'Cloud_Layer_IWC_Total': iwcnt})
     else:
         altx = ncf.variables['height'][:].data
         print('check for unit. Needs to be km')
