@@ -459,7 +459,6 @@ if __name__ == '__main__':
         print('step = %d' %step)
         print('extep = %d' %estep)
         sys.exit()
-    pdb.set_trace()
     # Initialize the dictionary of the parcel dictionaries
     partStep={}
     # initialize a grid that will be used to before actually doing any read
