@@ -26,6 +26,7 @@ import sys
 import datetime
 import pickle
 import gzip
+import flammkuchen as fk
 
 sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
 from io107 import readpart107, readidx107
@@ -37,6 +38,10 @@ I_DBORNE =  0x1000000 #: Lost after first step
 I_OLD = 0x800000 #: Reached end of time without encounter a cloud
 I_STOP = I_HIT + I_DEAD
 
+areas = {}
+seasons = {'djf': [12, 1, 2], 'mam': [3, 4, 5], 'jja': [6, 7, 8], 'son': [9, 10, 11]}
+
+missing_months = {2007: [1,2], 2011: [1, 5, 6, 7, 8, 9, 10, 11, 12], 2012: [1, 2, 3, 4], 2016: [2], 2017: [7], 2018: [1, 2, 3, 4, 5], 2019: [7, 8, 9, 10, 11, 12]}
 magic = 0.84
 
 #:----------------------------------------------------
@@ -214,7 +219,7 @@ def getCatalogFile(fn, p0=None, checkForNewFile=True):
     nameDic = {'CM': 'Cloud_Mask', 'TpH': 'Tropopause_Height', \
                 'SZA': 'SZA', 'SC': 'Simplified_Categorization', \
                 'lensel': 'lensel', 'npart': 'npart', 'vod': 'vis_optical_depth', \
-                'height': 'Track_Height', 'iwc': 'iwc'}
+                'height': 'Track_Height', 'iwc': 'iwc', 'sh': 'Specific_humidity'}
     retv = {}
     for rn in nameDic.keys():
         retv.update({rn: np.array([])})
@@ -291,32 +296,43 @@ def getInitfiles(mD, years, months, dn, uD, lt=True):
     if (not isinstance(years, list)) or (not isinstance(months, list)):
         print('Wrong type')
         pdb.set_trace()
-    
-    #: Decide the name for tempfile
-    if (len(years) == 1) and (len(months) == 12):
-        tempname = os.path.join(mD,'TempFiles', 'CALIOP-EAD-%d-%s' %(years[0], dn))
-        if uD:
-            tempname = tempname + '-DD'
-        tempname = tempname + '-init'
-        loadname = tempname + '.npy'
-    else:
-        loadname = ''
-    #: If tempfile exist and lt = True, load the tempfile
-    if lt and os.path.isfile(loadname):
-        retvP, retvC, retvM, outnamesT = np.load(loadname, allow_pickle=True)
-        outnames = [tempname, outnamesT]
-    #: if tempfile do not exist or lt = False. Do calculations
-    else:
-        outnames = []
-        i = -1
-        for y in years:
+    j = -1
+    for y in years:
+        j = j + 1
+        #: Decide the name for tempfile
+        if (len(months) == 12):
+            tempname = os.path.join(mD,'TempFiles', 'CALIOP-EAD-%d-%s' %(y, dn))
+            if uD:
+                tempname = tempname + '-DD'
+            tempname = tempname + '-init'
+            loadname = tempname + '-param.h5'
+            # loadname = tempname + '.npy'
+        else:
+            loadname = ''
+            tempname = ''
+        #: If tempfile exist and lt = True, load the tempfile
+        if (lt and os.path.isfile(loadname)):
+            # retvPL, retvCL, retvML, outnamesTL = np.load(loadname, allow_pickle=True)
+            retvPL = fk.load(tempname + '-part.h5')
+            retvCL = fk.load(tempname + '-catalog.h5')
+            retvML = fk.load(tempname + '-param.h5')
+            outnamesTL = retvPL.pop('on')
+            
+                
+        #: if tempfile do not exist or lt = False. Do calculations
+        else:
+            i = -1
+            outnamesTL = []
             for m in months:
+                if m in missing_months.keys():
+                    if m in missing_months[y]:
+                        continue
                 i = i + 1
                 #: Directories of the backward trajectories and name of the output file
                 outname = 'CALIOP-EAD-%d%02d-%s' %(y, m, dn)
                 if uD:
                     outname = outname + '-DD'
-                outnames.append(outname)
+                outnamesTL.append(outname)
                 trajDir = os.path.join(mD,outname) 
                 initDir = os.path.join(trajDir, 'Initfiles')
                 
@@ -329,71 +345,126 @@ def getInitfiles(mD, years, months, dn, uD, lt=True):
                 mf = readParamFile(paramFile)
                 pf['x'] = np.where(pf['x'] > 180, pf['x'] - 360, pf['x'])
                 if i == 0:
-                    retvP = pf.copy()
-                    retvC = cf.copy()
-                    retvM = mf.copy()
+                    retvPL = pf.copy()
+                    retvCL = cf.copy()
+                    retvML = mf.copy()
                 else:
-                    for arname in retvP.keys():
-                        if isinstance(retvP[arname], int):
-                            retvP[arname] = [retvP[arname]]
+                    for arname in retvPL.keys():
+                        if isinstance(retvPL[arname], int):
+                            retvPL[arname] = [retvPL[arname]]
                         if isinstance(pf[arname], int):
                             pf[arname] = [pf[arname]]
-                        retvP[arname] = np.concatenate((np.asarray(retvP[arname]), np.asarray(pf[arname])))
+                        retvPL[arname] = np.concatenate((np.asarray(retvPL[arname]), np.asarray(pf[arname])))
                     
-                    for arname in retvC.keys():
-                        if isinstance(retvC[arname], int):
-                            retvC[arname] = [retvC[arname]]
+                    for arname in retvCL.keys():
+                        if isinstance(retvCL[arname], int):
+                            retvCL[arname] = [retvCL[arname]]
                         if isinstance(cf[arname], int):
                             cf[arname] = [cf[arname]]
-                        retvC[arname] = np.concatenate((np.asarray(retvC[arname]), np.asarray(cf[arname])))
+                        retvCL[arname] = np.concatenate((np.asarray(retvCL[arname]), np.asarray(cf[arname])))
                     
-                    for arname in retvM.keys():
-                        if isinstance(retvM[arname], (int, np.int64, str, datetime.datetime)):
-                            retvM[arname] = [retvM[arname]]
+                    for arname in retvML.keys():
+                        if isinstance(retvML[arname], (int, np.int64, str, datetime.datetime)):
+                            retvML[arname] = [retvML[arname]]
                         if isinstance(mf[arname], (int, np.int64, str, datetime.datetime)):
                             mf[arname] = [mf[arname]]
-                        retvM[arname] = np.concatenate((np.asarray(retvM[arname]), np.asarray(mf[arname])))
-        #: If there are no tempfile, create one
-        if (loadname != '') and (not os.path.isfile(loadname)):
-            np.save(tempname, [retvP, retvC, retvM, outnames])
+                        retvML[arname] = np.concatenate((np.asarray(retvML[arname]), np.asarray(mf[arname])))
+            #: If there are no tempfile, create one
+            if (loadname != '') and (not os.path.isfile(loadname)):
+                retvPL.update({'on': outnamesTL})
+                fk.save(tempname + '-part.h5', retvPL)
+                fk.save(tempname + '-catalog.h5', retvCL)
+                fk.save(tempname + '-param.h5', retvML)
+                dummy = retvPL.pop('on')
+                dummy = None
+                # np.save(tempname, [retvPL, retvCL, retvML, outnamesTL])
+
+        
+        if j == 0:
+            retvP = retvPL.copy()
+            retvC = retvCL.copy()
+            retvM = retvML.copy()
+            outnames = [[tempname], [outnamesTL]]
+        else:
+            for arname in retvP.keys():
+                if isinstance(retvP[arname], int):
+                    retvP[arname] = [retvP[arname]]
+                if isinstance(retvPL[arname], int):
+                    retvPL[arname] = [retvPL[arname]]
+                retvP[arname] = np.concatenate((np.asarray(retvP[arname]), np.asarray(retvPL[arname])))
+            
+            for arname in retvC.keys():
+                if isinstance(retvC[arname], int):
+                    retvC[arname] = [retvC[arname]]
+                if isinstance(retvCL[arname], int):
+                    retvCL[arname] = [retvCL[arname]]
+                retvC[arname] = np.concatenate((np.asarray(retvC[arname]), np.asarray(retvCL[arname])))
+            
+            for arname in retvM.keys():
+                if isinstance(retvM[arname], (int, np.int64, str, datetime.datetime)):
+                    retvM[arname] = [retvM[arname]]
+                if isinstance(retvML[arname], (int, np.int64, str, datetime.datetime)):
+                    retvML[arname] = [retvML[arname]]
+                retvM[arname] = np.concatenate((np.asarray(retvM[arname]), np.asarray(retvML[arname])))
+            
+            outnames[0].append(tempname)
+            outnames[1].append(outnamesTL)
+            
     return retvP, retvC, retvM, outnames
 
 
 def getConvfiles(oD, inames, lt=True):
-    i = -1
-    if (len(inames) == 2) and (isinstance(inames[1], list)):
-        tempname = inames[0].replace('-init', '-conv')
-        loadname = tempname + '.npy'
-        onames = inames[1]
-    else:
-        onames = inames
-        tempname = ''
-        loadname = ''
-    if lt and os.path.isfile(loadname):
-        retvRvs, retvFls, retvAge, retvLons, retvLats, retvTemp, retvPres = np.load(loadname, allow_pickle=True)
-    else:
-        for outname in onames:
-            i = i + 1
-            fname = os.path.join(oD, outname + '.h5')
-            rvs, fls, age, lons, lats, temp, pres = readConvFile(fname)
-            if i == 0:
-                retvRvs = rvs.copy()
-                retvFls = fls.copy()
-                retvAge = age.copy()
-                retvLons = lons.copy()
-                retvLats = lats.copy()
-                retvTemp = temp.copy()
-                retvPres = pres.copy()
-            else:
-                retvRvs = np.concatenate((retvRvs, rvs))
-                retvFls = np.concatenate((retvFls, fls))
-                retvAge = np.concatenate((retvAge, age))
-                retvLons = np.concatenate((retvLons, lons))
-                retvLats = np.concatenate((retvLats, lats))
-                retvTemp = np.concatenate((retvTemp, temp))
-                retvPres = np.concatenate((retvPres, pres))
-        if not os.path.isfile(loadname) and (loadname != ''):
-            np.save(tempname, [retvRvs, retvFls, retvAge, retvLons, retvLats, retvTemp, retvPres])
+    for ln in range(len(inames[0])):
+        tempname = inames[0][ln]
+        onames = inames[1][ln]
+        if tempname == '':
+            loadname = ''
+        else:
+            tempname = tempname.replace('-init', '-conv')
+            loadname = tempname + '.npy'
+        if lt and os.path.isfile(loadname):
+            retvRvsL, retvFlsL, retvAgeL, retvLonsL, retvLatsL, retvTempL, retvPresL = np.load(loadname, allow_pickle=True)
+        else:
+            i = -1
+            for outname in onames:
+                i = i + 1
+                fname = os.path.join(oD, outname + '.h5')
+                rvs, fls, age, lons, lats, temp, pres = readConvFile(fname)
+                if i == 0:
+                    retvRvsL = rvs.copy()
+                    retvFlsL = fls.copy()
+                    retvAgeL = age.copy()
+                    retvLonsL = lons.copy()
+                    retvLatsL = lats.copy()
+                    retvTempL = temp.copy()
+                    retvPresL = pres.copy()
+                else:
+                    retvRvsL = np.concatenate((retvRvsL, rvs))
+                    retvFlsL = np.concatenate((retvFlsL, fls))
+                    retvAgeL = np.concatenate((retvAgeL, age))
+                    retvLonsL = np.concatenate((retvLonsL, lons))
+                    retvLatsL = np.concatenate((retvLatsL, lats))
+                    retvTempL = np.concatenate((retvTempL, temp))
+                    retvPresL = np.concatenate((retvPresL, pres))
+            if not os.path.isfile(loadname) and (loadname != ''):
+                np.save(tempname, [retvRvsL, retvFlsL, retvAgeL, retvLonsL, retvLatsL, retvTempL, retvPresL])
+        if ln == 0:
+            retvRvs = retvRvsL.copy()
+            retvFls = retvFlsL.copy()
+            retvAge = retvAgeL.copy()
+            retvLons = retvLonsL.copy()
+            retvLats = retvLatsL.copy()
+            retvTemp = retvTempL.copy()
+            retvPres = retvPresL.copy()
+        else:
+            retvRvs = np.concatenate((retvRvs, retvRvsL))
+            retvFls = np.concatenate((retvFls, retvFlsL))
+            retvAge = np.concatenate((retvAge, retvAgeL))
+            retvLons = np.concatenate((retvLons, retvLonsL))
+            retvLats = np.concatenate((retvLats, retvLatsL))
+            retvTemp = np.concatenate((retvTemp, retvTempL))
+            retvPres = np.concatenate((retvPres, retvPresL))
+        
     return retvRvs, retvFls.astype(int), retvAge, retvLons, retvLats, retvTemp, retvPres
 
 
@@ -479,13 +550,14 @@ if __name__ == '__main__':
     outDir = '%s/flexout/STC/Calipso-OUT' %datPath
     plotDir = '%s/LMD-Traczilla/Plots' %ekjDir
     
+    
     compare = False
-    year = [2007]
-    month = [11]
-    #month = [*range(1, 13)]
+    year = [2007]#, 2008, 2009]#, 2008, 2009, 2010]
+    # month = [2]#[1, 2, 3, 4]
+    month = [*range(1, 13)]
     dn = 'n'
     useDardar = True
-    lt = False
+    lt = True
     # outDir = '/data/ejohansson/flexout/STC/Calipso-OUT/Coldpoint'
     #: filename of outfiles
     # outnames = 'CALIOP-'+advect+'-'+date_end.strftime('%b%Y')+diffus+'-%s' %args.night 
