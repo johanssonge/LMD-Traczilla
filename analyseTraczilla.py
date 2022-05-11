@@ -26,10 +26,10 @@ import sys
 import datetime
 import pickle
 import gzip
-import flammkuchen as fk
+import flammkuchen as fk  # @UnresolvedImport
 
 sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
-from io107 import readpart107, readidx107
+from io107 import readidx107
 
 I_DEAD = 0x200000 #: Dead
 I_HIT = 0x400000 #: Hit a cloud
@@ -38,8 +38,19 @@ I_DBORNE =  0x1000000 #: Lost after first step
 I_OLD = 0x800000 #: Reached end of time without encounter a cloud
 I_STOP = I_HIT + I_DEAD
 
-areas = {}
-seasons = {'djf': [12, 1, 2], 'mam': [3, 4, 5], 'jja': [6, 7, 8], 'son': [9, 10, 11]}
+areas = {'Asia': {'minLat': -30, 'maxLat': 20, 'minLon': 80, 'maxLon': 150}, \
+         'Asian Monsoon': {'minLat': -30, 'maxLat': 30, 'minLon': 150, 'maxLon': 180}, \
+         'Anticyclone (AMA)': {'minLat': 20, 'maxLat': 30, 'minLon': -50, 'maxLon': 150}, \
+         'Pacific': {'minLat': -30, 'maxLat': 30, 'minLon': -180, 'maxLon': -115}, \
+         'Central America': {'minLat': -30, 'maxLat': 30, 'minLon': -115, 'maxLon': -40}, \
+         'Atlantic': {'minLat': -30, 'maxLat': 30, 'minLon': 150, 'maxLon': 180}, \
+         'Africa': {'minLat': -30, 'maxLat': 20, 'minLon': 150, 'maxLon': 180}}
+                  
+                   
+                   # Asian Monsoon 20–30◦ N 50◦ W–150◦ E  Pacific 30◦ S–30◦ N 180–115◦ W Central America 30◦ S–30◦ N 115–40◦ W Africa 30◦ S–30◦ N 40◦ W–50◦ E 30◦ S–20◦ N 50–80◦ E}
+
+
+seasons = {'year': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 'djf': [12, 1, 2], 'mam': [3, 4, 5], 'jja': [6, 7, 8], 'son': [9, 10, 11]}
 
 missing_months = {2007: [1,2], 2011: [1, 5, 6, 7, 8, 9, 10, 11, 12], 2012: [1, 2, 3, 4], 2016: [2], 2017: [7], 2018: [1, 2, 3, 4, 5], 2019: [7, 8, 9, 10, 11, 12]}
 magic = 0.84
@@ -183,7 +194,6 @@ def readConvFile(fn, usefk=False):
     Deafault is to use h5py but flamkuchen is an option, set usefk = True
     """
     if usefk:
-        import flammkuchen as fk  # @UnresolvedImport
         h5f = fk.load(fn)
     else:
         h5f = h5py.File(fn, 'r')
