@@ -19,18 +19,19 @@ import sys
 import pdb
 import datetime
 import time
-import psutil
+import psutil  # @UnresolvedImport
 from matplotlib import pyplot as plt  # @UnresolvedImport
 
-from analyseTraczilla import getConvfiles, I_HIT, I_OLD, readCatalogFile, getCatalogFile
-from convsrcErikFullGridSatTropo import satratio
+from analyseTraczilla import getConvfiles, I_HIT, I_OLD, getCatalogFile, seasons, missing_months
+# from convsrcErikFullGridSatTropo import satratio
 import glob
-import h5py
+import h5py  # @UnresolvedImport
+import socket
 
 
 
 sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
-from io107 import readpart107, readidx107
+from io107 import readidx107
 
 def convIWC(wc, p, T, qv):
     #: Convert WC from kg m-3 to kg /kg and to ppmv
@@ -163,10 +164,19 @@ def findFirstQschange(qo, qf, q06, q10, q12, q14, q16, p0IF, ppIF, tss, ageb, us
     
     return q06, q10, q12, q14, q16
     
-    
-    
-    
-    
+
+def readTempFile(fn):
+    h5f = h5py.File(fn, 'r')   
+    q10 = h5f['qs10'][:]
+    q12 = h5f['qs12'][:]
+    q14 = h5f['qs14'][:]
+    q16 = h5f['qs16'][:]
+    q06 = h5f['qs06'][:]
+    h = h5f['height'][:]
+    h5f.close()
+    # pdb.set_trace()
+    #
+    return q06, q10, q12, q14, q16, h
     
     
     
@@ -174,176 +184,235 @@ def findFirstQschange(qo, qf, q06, q10, q12, q14, q16, p0IF, ppIF, tss, ageb, us
     
 if __name__ == '__main__':
     
-    maindDir = '/home/ejohansson/Projects/LMD-Traczilla/Calipso'
-    outDir = '/home/ejohansson/Projects/LMD-Traczilla/Calipso/Calipso-OUT'
-    tempDir = os.path.join(maindDir, 'Tempfiles')
-    plotDir = os.path.join(maindDir, 'Plots')
+    if 'ciclad' in socket.gethostname():
+        datPath = os.environ['HOME'].replace('/home/', '/data/')
+        # scrPath = os.environ['HOME'].replace('/home/', '/scratchu/')
+        ekjDir = '/proju/flexpart/flexpart_in/EKJ/ejohansson'
+        mainDir = '%s/flexout/STC/Calipso' %ekjDir
+        outDir = '%s/flexout/STC/Calipso-OUT' %datPath
+        # plotDir = '%s/LMD-Traczilla/Plots' %ekjDir
+        # outDir = '/data/ejohansson/flexout/STC/Calipso-OUT'
+        tempDir = os.path.join(mainDir, 'Tempfiles')
+        
+        
+        pdb.set_trace()
+    elif 'oem-Latitude-5400' in socket.gethostname():
+        mainDir = '/home/ejohansson/Projects/LMD-Traczilla/Calipso'
+        outDir = '/home/ejohansson/Projects/LMD-Traczilla/Calipso/Calipso-OUT'
+        tempDir = os.path.join(mainDir, 'Tempfiles')
+        plotDir = os.path.join(mainDir, 'Plots')
+
+    elif ('climserv' in socket.gethostname()) | ('polytechnique' in socket.gethostname()):
+        sys.exit()
+    else:
+        print ('CANNOT RECOGNIZE HOST - DO NOT RUN ON NON DEFINED HOSTS')
+        sys.exit()
+    
+    
     if not os.path.isdir(tempDir):
         os.makedirs(tempDir)
     if not os.path.isdir(plotDir):
         os.makedirs(plotDir)
     
-    # outDir = '/data/ejohansson/flexout/STC/Calipso-OUT'
     forced_age_bound = None#5 * 86400 #: Seconds
-    stop_day = 2 * 86400 #: Seconds
+    stop_day = None#2 * 86400 #: Seconds
     
-    
-    
-    years = [2008]
-    months = [1]
+    lt = True
+    ct = True
+    ses = 'year'
+    area = 'global'
+    years = [2008, 2009]
+    months = [1]#, 2]
     ticT = time.time()
+    y = -1
     for year in years:
-        for mon in months:
-            tempname = 'part--%d%02d.h5' %(year, mon)
+        for mon in months:#seasons[ses]:
+            #: Check for missing months
+            if year in missing_months.keys():
+                if mon in missing_months[year]:
+                    continue
+                   
+            y  = y + 1
+            
+            tempname = '%s/part-%d%02d-%s-%s.h5' %(tempDir, year, mon, ses, area)
             outname = 'CALIOP-EAD-%d%02d-n-DD' %(year, mon)
             # partDir = os.path.join('/proju/flexpart/flexpart_in/EKJ/ejohansson/flexout/STC/Calipso', outname)
-            partDir = os.path.join(maindDir, outname)
+            partDir = os.path.join(mainDir, outname)
             initDir = os.path.join(partDir, 'Initfiles')
-            catalogFile = os.path.join(initDir, 'selDardar_Calalog-%d%02d-n.pkl' %(year, mon))
-            # te = readCatalogFile(partDir + '/Initfiles/selDardar_Calalog-200701-n.pkl')
-            #: Read catalogfile
-            cf = getCatalogFile(catalogFile, checkForNewFile=False)
-            #: Read out file
-            rvs, fls, age, lons, lats, temp, pres = getConvfiles(outDir, [[''], [[outname]]])
-            hits = (fls & I_HIT) == I_HIT
-            if forced_age_bound is not None:
-                hits = np.where(age > forced_age_bound, False, hits)
             
-            all_inds = np.ones(hits.shape).astype(bool)
-            use_inds = hits
-            #: Read part_000 file
-            f0 = os.path.join(partDir, 'part_000')
-            part0 = readidx107(f0, quiet=True)
-            
-            if stop_day is not None:
-                use_inds = np.where((np.abs(part0['ir_start']) > stop_day), False, use_inds)
-            
-            use_inds = use_inds & (cf['iwc'] > 0) 
-            #: Calc saturation
-            # rvs0O = satratio(part0['p'][use_inds], part0['t'][use_inds])
-            rvs0 = esati_murphy(part0['p'][use_inds], part0['t'][use_inds])
-            iwc0 = convIWC(cf['iwc'][use_inds], part0['p'][use_inds], part0['t'][use_inds], cf['sh'][use_inds])
-            
-            #: get the desired variables and put in a 2D array
-            pMin = np.zeros([2, hits.sum()])
-            pMin[0, :] = part0['p'][hits]
-            rvsMin = np.zeros([2, use_inds.sum()])
-            rvsMin[0, :] = rvs0
-            # q0 = rvs0 + iwc0
-            q0 = rvs0 * 1.6
-            q100 = np.zeros(use_inds.sum())
-            qs = np.zeros(use_inds.sum())
-            qsn = np.zeros(use_inds.sum())
-            
-            qs06 = np.zeros([2, use_inds.sum()]) + np.nan
-            qs08 = np.zeros([2, use_inds.sum()]) + np.nan
-            qs10 = np.zeros([2, use_inds.sum()]) + np.nan
-            qs12 = np.zeros([2, use_inds.sum()]) + np.nan
-            qs14 = np.zeros([2, use_inds.sum()]) + np.nan
-            qs16 = np.zeros([2, use_inds.sum()]) + np.nan
-            
-            
-            
-            # qs = [[]] * use_inds.sum()
-            
-            #hmax = 18
-            
-            pfiles = glob.glob(partDir + '/part_*')
-            pfi = []
-            for pf in pfiles:
-                pfi.append(int(pf.split('part_')[-1].replace('.gz', '')))
-            pind = np.argsort(pfi)
-            pfiles = np.asarray(pfiles)[pind][1:]
-            step = np.asarray(pfi)[pind][1:][0].item()
-            hmax = np.asarray(pfi)[pind][1:][-1].item()
-            dstep = datetime.timedelta(hours=step)
-            print('hmax=%d' %hmax)
-            for phour in range(step, hmax + 1, step):
-                # if phour < 1749:
-                #     continue
-                tic = time.time()
-                #: Read part_xxx file
-                partfile = f0.replace('part_000', 'part_%03d' %phour)
-                if not os.path.isfile(partfile + '.gz'):
-                    print("No such file")
-                    print(partfile)
-                    print('')
-                    continue
+            if os.path.isfile(tempname) and lt:
+                qs06_mon, qs10_mon, qs12_mon, qs14_mon, qs16_mon, height_mon = readTempFile(tempname)
+            else:
+                #: Read part_000 file
+                f0 = os.path.join(partDir, 'part_000')
+                part0 = readidx107(f0, quiet=True)
+                #: Read catalogfile
+                catalogFile = os.path.join(initDir, 'selDardar_Calalog-%d%02d-n.pkl' %(year, mon))
+                cf = getCatalogFile(catalogFile, checkForNewFile=False)
+                #: Read out file
+                rvs, fls, age, lons, lats, temp, pres = getConvfiles(outDir, [[''], [[outname]]])
+                hits = (fls & I_HIT) == I_HIT
                 
-                partf = readidx107(partfile, quiet=True)
-                print("Read time = %.02f s" %(time.time() - tic))
-                if len(partf['idx_back']) == 0:
-                    continue
+                #: What inds should we use?
+                all_inds = np.ones(hits.shape).astype(bool)
+                use_inds = hits
+                #: Remove inds that has age after forced_age_bound
+                if forced_age_bound is not None:
+                    use_inds = np.where(age > forced_age_bound, False, use_inds)
+                #: Remove inds that starts after stop_day
+                if stop_day is not None:
+                    use_inds = np.where((np.abs(part0['ir_start']) > stop_day), False, use_inds)
+                
+                #: IWC is required
+                use_inds = use_inds & (cf['iwc'] > 0) 
                 #: Calc saturation
-                # rvsf = satratio(partf['p'], partf['t'])
-                rvsf = esati_murphy(partf['p'], partf['t'])
-                #: Check memory
-                pid = os.getpid()
-                py = psutil.Process(pid)
-                memoryUse = py.memory_info()[0]/2**30
-                print('memory use: {:4.2f} gb'.format(memoryUse))
-                print('')
-                # temp_full = np.zeros(part0['idx_back'].shape[0]) + np.nan
-                # pinds = partf['idx_back']-1
-                # temp_full[pinds] = partf['p']
-                # p_min = np.nanmin((qs_min[0,:], temp_full[hits]), axis=0)
-                # # n_nan_inds = (~np.isnan(p_min))
-                # # qs_min[1,:][n_nan_inds] = np.where(np.nanargmin((qs_min[0,:][n_nan_inds], temp_full[hits][n_nan_inds]), axis=0) == 1, phour, qs_min[1,:][n_nan_inds])
-                # qs_min[1,:] = np.where(np.nanargmin((qs_min[0,:], temp_full[hits]), axis=0) == 1, phour, qs_min[1,:])
-                # qs_min[0,:] = p_min
-                #: Find Min
-                # (q0, rvsf, part0['idx_back']-1, partf['idx_back']-1, use_inds, phour, qs, q100) 
-                # rvsMin = findMin(rvsMin, rvsf, part0['idx_back']-1, partf['idx_back']-1, use_inds, phour)
-                # pMin = findMin(pMin, part0['idx_back']-1, partf['idx_back']-1, hits, partf['p'], phour)
-                #: Find Change
-                # qs, qsn = findQschange(q0, rvsf, qs, qsn, (part0['idx_back'] - part0['idx_orgn']), (partf['idx_back'] - part0['idx_orgn']), use_inds, phour)
-                if phour == 3:
-                    use_inds_3 = np.zeros(use_inds.shape[0]).astype(bool)
-                    use_inds_3[(partf['idx_back'] - part0['idx_orgn'])] = True
+                # rvs0O = satratio(part0['p'][use_inds], part0['t'][use_inds])
+                rvs0 = esati_murphy(part0['p'][use_inds], part0['t'][use_inds])
+                iwc0_mon = convIWC(cf['iwc'][use_inds], part0['p'][use_inds], part0['t'][use_inds], cf['sh'][use_inds])
+                #: Calc q0
+                # q0 = rvs0 + iwc0_mon
+                q0 = rvs0 * 1.6
                 
-                qs06, qs10, qs12, qs14, qs16 = findFirstQschange(q0, rvsf, qs06, qs10, qs12, qs14, qs16, (part0['idx_back'] - part0['idx_orgn']), (partf['idx_back'] - part0['idx_orgn']), np.abs(partf['itime']-partf['ir_start']), age[use_inds], use_inds, phour)
-                print("Calc time = %.02f s" %(time.time() - tic))
-                #: Check memory
-                pid = os.getpid()
-                py = psutil.Process(pid)
-                memoryUse = py.memory_info()[0]/2**30
-                print('memory use: {:4.2f} gb'.format(memoryUse))
-                # if (np.isnan(qs10[0, :]).sum() + np.isnan(qs12[0, :]).sum() + np.isnan(qs14[0, :]).sum() + np.isnan(qs16[0, :]).sum()) == 0:
-                #     print('No more values to find')
-                #     pdb.set_trace()
-                #     break
+                #: get the desired variables and put in a 2D array
+                pMin = np.zeros([2, use_inds.sum()])
+                pMin[0, :] = part0['p'][use_inds]
+                rvsMin = np.zeros([2, use_inds.sum()])
+                rvsMin[0, :] = rvs0
+                q100 = np.zeros(use_inds.sum())
+                qs = np.zeros(use_inds.sum())
+                qsn = np.zeros(use_inds.sum())
                 
-                #: Match Indices
-                # mi = np.asarray(list((set(partf['idx_back']) & set(part0['idx_back'][hits]))))
-                # inds = np.searchsorted(part0['idx_back'][hits], mi)
-                # pdb.set_trace()
+                qs06_mon = np.zeros([2, use_inds.sum()]) + np.nan
+                qs08_mon = np.zeros([2, use_inds.sum()]) + np.nan
+                qs10_mon = np.zeros([2, use_inds.sum()]) + np.nan
+                qs12_mon = np.zeros([2, use_inds.sum()]) + np.nan
+                qs14_mon = np.zeros([2, use_inds.sum()]) + np.nan
+                qs16_mon = np.zeros([2, use_inds.sum()]) + np.nan
                 
-                # if np.abs(partf['itime']) > (forced_age_bound + stop_day):
-                #     break
                 
-                # idx_full = np.zeros(part0['idx_back'].shape[0]).astype(bool)
-                #
-                # idx_full[(partf['idx_back'] - part0['idx_orgn'])] = True
-                #
-                #
-                # if idx_full[use_inds].sum() == 0:
-                #     print('0')
-                #     pdb.set_trace()
-                if phour >150:
+                
+                # qs = [[]] * use_inds.sum()
+                
+                #hmax = 18
+                
+                pfiles = glob.glob(partDir + '/part_*')
+                pfi = []
+                for pf in pfiles:
+                    pfi.append(int(pf.split('part_')[-1].replace('.gz', '')))
+                pind = np.argsort(pfi)
+                pfiles = np.asarray(pfiles)[pind][1:]
+                step = np.asarray(pfi)[pind][1:][0].item()
+                hmax = np.asarray(pfi)[pind][1:][-1].item()
+                dstep = datetime.timedelta(hours=step)
+                print('hmax=%d' %hmax)
+                for phour in range(step, hmax + 1, step):
+                    # if phour < 1749:
+                    #     continue
+                    tic = time.time()
+                    #: Read part_xxx file
+                    partfile = f0.replace('part_000', 'part_%03d' %phour)
+                    if not os.path.isfile(partfile + '.gz'):
+                        print("No such file")
+                        print(partfile)
+                        print('')
+                        continue
                     
-                    break
-            # f2r = f2.replace('.gz', '')
-            h5file = h5py.File(tempname, 'w')
-            h5file.create_dataset('qs06', data = qs06)
-            h5file.create_dataset('qs10', data = qs10)
-            h5file.create_dataset('qs12', data = qs12)
-            h5file.create_dataset('qs14', data = qs14)
-            h5file.create_dataset('qs16', data = qs16)
-            h5file.create_dataset('age', data = age[use_inds])
-            h5file.create_dataset('ir_start', data = part0['ir_start'][use_inds])
-            h5file.create_dataset('use_inds', data = use_inds)
-            h5file.close()
-    
+                    partf = readidx107(partfile, quiet=True)
+                    print("Read time = %.02f s" %(time.time() - tic))
+                    if len(partf['idx_back']) == 0:
+                        continue
+                    #: Calc saturation
+                    # rvsf = satratio(partf['p'], partf['t'])
+                    rvsf = esati_murphy(partf['p'], partf['t'])
+                    #: Check memory
+                    pid = os.getpid()
+                    py = psutil.Process(pid)
+                    memoryUse = py.memory_info()[0]/2**30
+                    print('memory use: {:4.2f} gb'.format(memoryUse))
+                    print('')
+                    # temp_full = np.zeros(part0['idx_back'].shape[0]) + np.nan
+                    # pinds = partf['idx_back']-1
+                    # temp_full[pinds] = partf['p']
+                    # p_min = np.nanmin((qs_min[0,:], temp_full[hits]), axis=0)
+                    # # n_nan_inds = (~np.isnan(p_min))
+                    # # qs_min[1,:][n_nan_inds] = np.where(np.nanargmin((qs_min[0,:][n_nan_inds], temp_full[hits][n_nan_inds]), axis=0) == 1, phour, qs_min[1,:][n_nan_inds])
+                    # qs_min[1,:] = np.where(np.nanargmin((qs_min[0,:], temp_full[hits]), axis=0) == 1, phour, qs_min[1,:])
+                    # qs_min[0,:] = p_min
+                    #: Find Min
+                    # (q0, rvsf, part0['idx_back']-1, partf['idx_back']-1, use_inds, phour, qs, q100) 
+                    # rvsMin = findMin(rvsMin, rvsf, part0['idx_back']-1, partf['idx_back']-1, use_inds, phour)
+                    # pMin = findMin(pMin, part0['idx_back']-1, partf['idx_back']-1, hits, partf['p'], phour)
+                    #: Find Change
+                    # qs, qsn = findQschange(q0, rvsf, qs, qsn, (part0['idx_back'] - part0['idx_orgn']), (partf['idx_back'] - part0['idx_orgn']), use_inds, phour)
+                    
+                    qs06_mon, qs10_mon, qs12_mon, qs14_mon, qs16_mon = \
+                            findFirstQschange(q0, rvsf, qs06_mon, qs10_mon, qs12_mon, qs14_mon, qs16_mon, \
+                                              (part0['idx_back'] - part0['idx_orgn']), \
+                                              (partf['idx_back'] - part0['idx_orgn']), \
+                                              np.abs(partf['itime']-partf['ir_start']), \
+                                              age[use_inds], use_inds, phour)
+                    print("Calc time = %.02f s" %(time.time() - tic))
+                    #: Check memory
+                    pid = os.getpid()
+                    py = psutil.Process(pid)
+                    memoryUse = py.memory_info()[0]/2**30
+                    print('memory use: {:4.2f} gb'.format(memoryUse))
+                    # if (np.isnan(qs10[0, :]).sum() + np.isnan(qs12[0, :]).sum() + np.isnan(qs14[0, :]).sum() + np.isnan(qs16[0, :]).sum()) == 0:
+                    #     print('No more values to find')
+                    #     pdb.set_trace()
+                    #     break
+                    
+                    #: Match Indices
+                    # mi = np.asarray(list((set(partf['idx_back']) & set(part0['idx_back'][hits]))))
+                    # inds = np.searchsorted(part0['idx_back'][hits], mi)
+                    # pdb.set_trace()
+                    
+                    # if np.abs(partf['itime']) > (forced_age_bound + stop_day):
+                    #     break
+                    
+                    # idx_full = np.zeros(part0['idx_back'].shape[0]).astype(bool)
+                    #
+                    # idx_full[(partf['idx_back'] - part0['idx_orgn'])] = True
+                    #
+                    #
+                    # if idx_full[use_inds].sum() == 0:
+                    #     print('0')
+                    #     pdb.set_trace()
+                    if phour >150:
+                        
+                        break
+                # f2r = f2.replace('.gz', '')
+                height_mon = cf['height'][use_inds]
+                if not os.path.isfile(tempname) or ct:
+                    print('Create Temp File')
+                    h5file = h5py.File(tempname, 'w')
+                    h5file.create_dataset('qs06', data = qs06_mon)
+                    h5file.create_dataset('qs10', data = qs10_mon)
+                    h5file.create_dataset('qs12', data = qs12_mon)
+                    h5file.create_dataset('qs14', data = qs14_mon)
+                    h5file.create_dataset('qs16', data = qs16_mon)
+                    h5file.create_dataset('iwc0', data = iwc0_mon)
+                    h5file.create_dataset('height', data = height_mon)
+                    h5file.create_dataset('age', data = age[use_inds])
+                    h5file.create_dataset('ir_start', data = part0['ir_start'][use_inds])
+                    h5file.create_dataset('use_inds', data = use_inds)
+                    h5file.close()
+            if y == 0:
+                qs06 = qs06_mon
+                qs10 = qs10_mon
+                qs12 = qs12_mon
+                qs14 = qs14_mon
+                qs16 = qs16_mon
+                height = height_mon
+                
+            else:
+                qs06 = np.hstack((qs06, qs06_mon))
+                qs10 = np.hstack((qs10, qs10_mon))
+                qs12 = np.hstack((qs12, qs12_mon))
+                qs14 = np.hstack((qs14, qs14_mon))
+                qs16 = np.hstack((qs16, qs16_mon))
+                height = np.hstack((height, height_mon))
+                
     heightBoundaries = [[None, None], [14,15], [15,16], [14,16], [16, 18], [18, 20], [18,19], [19,20]]
     
     title_org = 'Histogram'
@@ -356,9 +425,9 @@ if __name__ == '__main__':
             figname_1 = figname_1_org + '_%d-%d' %(h1, h2)
             figname_2 = figname_2_org + '_%d-%d' %(h1, h2)
             if h2 == heightBoundaries[-1][1]:
-                inds_h = (cf['height'][use_inds] >= h1) & (cf['height'][use_inds] <= h2)
+                inds_h = (height >= h1) & (height <= h2)
             else:
-                inds_h = (cf['height'][use_inds] >= h1) & (cf['height'][use_inds] < h2)
+                inds_h = (height >= h1) & (height < h2)
             inds = inds_org & inds_h
         else:
             title = title_org
@@ -429,7 +498,6 @@ if __name__ == '__main__':
         # for rect in rects2:
         #     height = rect.get_height()
         #     plt.text(rect.get_x() + rect.get_width() / 2.0, height, '', ha='center', va='bottom')#f'{height:.0f}', ha='center', va='bottom')
-    
         
         ax.text
         ax.set_xticks(x)
@@ -475,7 +543,6 @@ if __name__ == '__main__':
     
     
     # plt.close(fig)
-    pdb.set_trace()
     # h = ax.hist(qsn)
     # counts = np.bincount(qsn.astype(int))
     # ax.bar(range(len(counts)), counts, width=1, align='center')
