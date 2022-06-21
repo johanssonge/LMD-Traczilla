@@ -22,7 +22,7 @@ import time
 import psutil  # @UnresolvedImport
 from matplotlib import pyplot as plt  # @UnresolvedImport
 
-from analyseTraczilla import getConvfiles, I_HIT, I_OLD, getCatalogFile, seasons, missing_months
+from analyseTraczilla import getConvfiles, I_HIT, I_OLD, getCatalogFile, missing_months, seasons, areas
 # from convsrcErikFullGridSatTropo import satratio
 import glob
 import h5py  # @UnresolvedImport
@@ -30,27 +30,34 @@ import socket
 
 
 
-sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
+# sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
 from io107 import readidx107
+
+# Calculation of the saturation mixing ratio from actual temperature and pressure
+def satratio2(p,T):
+    """ Calculate the mass saturation ratio from pressure (in Pa) and temperature 
+    (in K). Output in kg/kg """
+    estar = 1.0008*np.exp(23.33086-(6111.72784/T)+0.15215*np.log(T))
+    satr = 0.622 * estar/(0.01*p-estar)
+    return satr
 
 def convIWC(wc, p, T, qv):
     #: Convert WC from kg m-3 to kg /kg and to ppmv
     Md = 28.97
     Rv = 461
     Rd = 287.04
-    #: https://www.gastec.co.jp/en/technology/knowledge/concentration/
-    ppm1 = (wc) * (22.4 / Md) * (T / 273) * (101300 / p)
-    
-    #: https://www.cdc.gov/niosh/docs/2004-101/calc.html
-    ro2 = p / (Rd * T)
-    wc_kgkg2 = wc * 1/ro2
-    # wc_mgkg = wc_kgkg * 1000000
-    ppm2 = wc_kgkg2 * 22.41 / Md
+    # #: https://www.gastec.co.jp/en/technology/knowledge/concentration/
+    # ppm1 = (wc) * (22.4 / Md) * (T / 273) * (101300 / p)
+    # #: https://www.cdc.gov/niosh/docs/2004-101/calc.html
+    # ro2 = p / (Rd * T)
+    # wc_kgkg2 = wc * 1/ro2
+    # # wc_mgkg = wc_kgkg * 1000000
+    # ppm2 = wc_kgkg2 * 22.41 / Md
     
     Tv = T * (1 + (Rv/Rd - 1) * qv)
     ro = p / (Rd * Tv)
     wc_kgkg = wc * 1/ro
-    ppm = wc_kgkg * 1 / 0.622
+    ppm = wc_kgkg# * 1 / 0.622
     return ppm
     
 def esati_murphy(p, T):
@@ -59,6 +66,8 @@ def esati_murphy(p, T):
     lnP=9.550426-5723.265/T+3.53068*np.log(T)-0.00728332*T
     
     esati_murphy=np.exp(lnP) / p
+    #: Convert to kg/kg
+    esati_murphy = esati_murphy * 0.622
     #ppmv
     #kg
     
@@ -87,14 +96,23 @@ def findQschange(qo, qf, qsr, qsnr, p0IF, ppIF, use_inds, ft):
     nanind = ~np.isnan(dp)
     
     abovind = nanind & (dp > ratio) & (qsr != 1)
-    beloind = nanind & (dp <= ratio) & (qs != -1)
+    beloind = nanind & (dp <= ratio) & (qsr != -1)
     qsr[abovind] = 1
     qsr[beloind] = -1
     qsnr[abovind] = qsnr[abovind] + 1
     qsnr[beloind] = qsnr[beloind] + 1
     return qsr, qsnr
 
-def findFirstQschange(qo, qf, q06, q10, q12, q14, q16, p0IF, ppIF, tss, ageb, use_inds, ft):
+def FirstQschange(q,o, d, ni, h, th):
+    q[0, o & np.isnan(q[0, :])] = 3
+    q[0, o & (q[0, :] == 1)] = 2
+    above = ni & (d >= th) & (np.isnan(q[0, :]))# | (q16[0, :] == 1))
+    below = ni & (d < th) & (~(q[0, :] > 1))
+    q[0, above] = 1
+    q[0, below] = -1
+    q[1, (below & np.isnan(q[1, :]))] = h
+    return q
+def findFirstQschange(qo, qf, q06, q10, q12, q13, q14, q16, p0IF, ppIF, tss, ageb, use_inds, ft):
     qf_full = np.zeros(p0IF.shape[0]) + np.nan
     qf_full[ppIF] = qf
     
@@ -107,122 +125,183 @@ def findFirstQschange(qo, qf, q06, q10, q12, q14, q16, p0IF, ppIF, tss, ageb, us
 
     # age_ind = tss_use <= ageb
     old = (ageb < tss_use) & nanind
-    
     #: Old directly
-    q16[0, old & np.isnan(q16[0, :])] = 3
-    q14[0, old & np.isnan(q14[0, :])] = 3
-    q12[0, old & np.isnan(q12[0, :])] = 3
-    q10[0, old & np.isnan(q10[0, :])] = 3
-    q06[0, old & np.isnan(q06[0, :])] = 3
+    # q16[0, old & np.isnan(q16[0, :])] = 3
+    # q14[0, old & np.isnan(q14[0, :])] = 3
+    # q12[0, old & np.isnan(q12[0, :])] = 3
+    # q10[0, old & np.isnan(q10[0, :])] = 3
+    # q06[0, old & np.isnan(q06[0, :])] = 3
     #: Old Without going below
-    q16[0, old & (q16[0, :] == 1)] = 2
-    q14[0, old & (q14[0, :] == 1)] = 2
-    q12[0, old & (q12[0, :] == 1)] = 2
-    q10[0, old & (q10[0, :] == 1)] = 2
-    q06[0, old & (q06[0, :] == 1)] = 2
+    # q16[0, old & (q16[0, :] == 1)] = 2
+    # q14[0, old & (q14[0, :] == 1)] = 2
+    # q12[0, old & (q12[0, :] == 1)] = 2
+    # q10[0, old & (q10[0, :] == 1)] = 2
+    # q06[0, old & (q06[0, :] == 1)] = 2
     #: Old in any way
-    # old16 = q16[0, :] > 1
-    # old14 = q14[0, :] > 1
-    # old12 = q12[0, :] > 1
-    # old10 = q10[0, :] > 1
-    # old06 = q06[0, :] > 1
+    # # old16 = q16[0, :] > 1
+    # # old14 = q14[0, :] > 1
+    # # old12 = q12[0, :] > 1
+    # # old10 = q10[0, :] > 1
+    # # old06 = q06[0, :] > 1
     
     #: nanind & greater than th & nan :not larger than 1 i.e. old
-    abov16 = nanind & (dq >= 1.6) & (np.isnan(q16[0, :]))# | (q16[0, :] == 1))
-    abov14 = nanind & (dq >= 1.4) & (np.isnan(q14[0, :]))# | (q14[0, :] == 1))
-    abov12 = nanind & (dq >= 1.2) & (np.isnan(q12[0, :]))# | (q12[0, :] == 1))
-    abov10 = nanind & (dq >= 1.0) & (np.isnan(q10[0, :]))# | (q10[0, :] == 1))
-    abov06 = nanind & (dq >= 0.6) & (np.isnan(q06[0, :]))# | (q06[0, :] == 1))
+    # abov16 = nanind & (dq >= 1.6) & (np.isnan(q16[0, :]))# | (q16[0, :] == 1))
+    # abov14 = nanind & (dq >= 1.4) & (np.isnan(q14[0, :]))# | (q14[0, :] == 1))
+    # abov12 = nanind & (dq >= 1.2) & (np.isnan(q12[0, :]))# | (q12[0, :] == 1))
+    # abov10 = nanind & (dq >= 1.0) & (np.isnan(q10[0, :]))# | (q10[0, :] == 1))
+    # abov06 = nanind & (dq >= 0.6) & (np.isnan(q06[0, :]))# | (q06[0, :] == 1))
     
     #: Not above but still non nan
     #: nanind & less than th & not larger than 1 i.e. old
-    below16 = nanind & (dq < 1.6) & (~(q16[0, :] > 1))
-    below14 = nanind & (dq < 1.4) & (~(q14[0, :] > 1))
-    below12 = nanind & (dq < 1.2) & (~(q12[0, :] > 1))
-    below10 = nanind & (dq < 1.0) & (~(q10[0, :] > 1))
-    below06 = nanind & (dq < 0.6) & (~(q06[0, :] > 1))
+    # below16 = nanind & (dq < 1.6) & (~(q16[0, :] > 1))
+    # below14 = nanind & (dq < 1.4) & (~(q14[0, :] > 1))
+    # below12 = nanind & (dq < 1.2) & (~(q12[0, :] > 1))
+    # below10 = nanind & (dq < 1.0) & (~(q10[0, :] > 1))
+    # below06 = nanind & (dq < 0.6) & (~(q06[0, :] > 1))
     
-    q16[0, abov16] = 1 #dq[abov16]
-    q14[0, abov14] = 1 #dq[abov14]
-    q12[0, abov12] = 1 #dq[abov12]
-    q10[0, abov10] = 1 #dq[abov10]
-    q06[0, abov06] = 1 #dq[abov06]
+    # q16[0, abov16] = 1 #dq[abov16]
+    # q14[0, abov14] = 1 #dq[abov14]
+    # q12[0, abov12] = 1 #dq[abov12]
+    # q10[0, abov10] = 1 #dq[abov10]
+    # q06[0, abov06] = 1 #dq[abov06]
     
-    q16[0, below16] = -1 #dq[abov16]
-    q14[0, below14] = -1 #dq[abov14]
-    q12[0, below12] = -1 #dq[abov12]
-    q10[0, below10] = -1 #dq[abov10]
-    q06[0, below06] = -1 #dq[abov06]
+    # q16[0, below16] = -1 #dq[abov16]
+    # q14[0, below14] = -1 #dq[abov14]
+    # q12[0, below12] = -1 #dq[abov12]
+    # q10[0, below10] = -1 #dq[abov10]
+    # q06[0, below06] = -1 #dq[abov06]
     
     
     #: Save time for first time below   
-    q16[1, (below16 & np.isnan(q16[1, :]))] = ft
-    q14[1, (below14 & np.isnan(q14[1, :]))] = ft
-    q12[1, (below12 & np.isnan(q12[1, :]))] = ft
-    q10[1, (below10 & np.isnan(q10[1, :]))] = ft
-    q06[1, (below06 & np.isnan(q06[1, :]))] = ft
+    # q16[1, (below16 & np.isnan(q16[1, :]))] = ft
+    # q14[1, (below14 & np.isnan(q14[1, :]))] = ft
+    # q12[1, (below12 & np.isnan(q12[1, :]))] = ft
+    # q10[1, (below10 & np.isnan(q10[1, :]))] = ft
+    # q06[1, (below06 & np.isnan(q06[1, :]))] = ft
     
-    return q06, q10, q12, q14, q16
+    q16 = FirstQschange(q16,old, dq, nanind, ft, 1.6)
+    q14 = FirstQschange(q14,old, dq, nanind, ft, 1.4)
+    q13 = FirstQschange(q13,old, dq, nanind, ft, 1.3)
+    q12 = FirstQschange(q12,old, dq, nanind, ft, 1.2)
+    q10 = FirstQschange(q10,old, dq, nanind, ft, 1.0)
+    q06 = FirstQschange(q06,old, dq, nanind, ft, 0.6)
+    # if not (q14[~np.isnan(q14)] == q10[~np.isnan(q14)]).all():
+    #     print('dame')
+    #     pdb.set_trace()
+    # if not (q16[~np.isnan(q16)] == q12[~np.isnan(q16)]).all():
+    #     print('dame')
+    #     pdb.set_trace()
+    
+    return q06, q10, q12, q13, q14, q16
     
 
 def readTempFile(fn):
     h5f = h5py.File(fn, 'r')   
     q10 = h5f['qs10'][:]
     q12 = h5f['qs12'][:]
+    q13 = h5f['qs13'][:]
     q14 = h5f['qs14'][:]
     q16 = h5f['qs16'][:]
     q06 = h5f['qs06'][:]
     h = h5f['height'][:]
+    lat = h5f['lats'][:]
+    lon = h5f['lons'][:]
+    'ohClr_height'
+    extras = {'use_inds': h5f['use_inds'][:], 'ohClo_use_inds': h5f['ohClo_use_inds'][:], 'ohClr_use_inds': h5f['ohClr_use_inds'][:], \
+              'ohClo_height': h5f['ohClo_height'][:], 'ohClr_height': h5f['ohClr_height'][:]}
     h5f.close()
-    # pdb.set_trace()
-    #
-    return q06, q10, q12, q14, q16, h
+    return q06, q10, q12, q13, q14, q16, h, lat, lon, extras
     
     
     
     
     
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--ct", action='store_false', default = True, 
+                        help = "Create Temp Files, only valid if no temp file is loaded. Default = True")
+    parser.add_argument("-l", "--lt", action='store_false', default = True, 
+                        help = "Load Temp Files. Default = True")
+
+    parser.add_argument("-y", "--year", type=int, choices=([0]+[*range(2007, 2020)]), default=0,  
+                        help = "year. Default=2018")
+    parser.add_argument("-m", "--month", type=int, choices=(np.arange(-6, 13)), default=0, 
+                        help = "Month. Default=6")
     
+    args = parser.parse_args()
     if 'ciclad' in socket.gethostname():
         datPath = os.environ['HOME'].replace('/home/', '/data/')
-        # scrPath = os.environ['HOME'].replace('/home/', '/scratchu/')
         ekjDir = '/proju/flexpart/flexpart_in/EKJ/ejohansson'
         mainDir = '%s/flexout/STC/Calipso' %ekjDir
         outDir = '%s/flexout/STC/Calipso-OUT' %datPath
-        # plotDir = '%s/LMD-Traczilla/Plots' %ekjDir
-        # outDir = '/data/ejohansson/flexout/STC/Calipso-OUT'
-        tempDir = os.path.join(mainDir, 'Tempfiles')
+        plotDir = '%s/LMD-Traczilla/Calipso/Plots' %ekjDir
+        tempDir = os.path.join(mainDir, 'TempFiles/Part')
         
-        
-        pdb.set_trace()
     elif 'oem-Latitude-5400' in socket.gethostname():
         mainDir = '/home/ejohansson/Projects/LMD-Traczilla/Calipso'
         outDir = '/home/ejohansson/Projects/LMD-Traczilla/Calipso/Calipso-OUT'
-        tempDir = os.path.join(mainDir, 'Tempfiles')
+        tempDir = os.path.join(mainDir, 'TempFiles')
         plotDir = os.path.join(mainDir, 'Plots')
 
     elif ('climserv' in socket.gethostname()) | ('polytechnique' in socket.gethostname()):
+        print('climserv or polytechnique in host name')
         sys.exit()
     else:
         print ('CANNOT RECOGNIZE HOST - DO NOT RUN ON NON DEFINED HOSTS')
         sys.exit()
-    
     
     if not os.path.isdir(tempDir):
         os.makedirs(tempDir)
     if not os.path.isdir(plotDir):
         os.makedirs(plotDir)
     
-    forced_age_bound = None#5 * 86400 #: Seconds
+    forced_age_bound = 7776000 #: 90 days #864000#5 * 86400 #: Seconds
     stop_day = None#2 * 86400 #: Seconds
+    # break_point = 1000
+    if forced_age_bound is None:
+        break_point = None
+    else:
+        break_point = (31 + 1 + int(forced_age_bound/86400) * 24)
     
-    lt = True
-    ct = True
-    ses = 'year'
+    
+
+
+    lt = args.lt
+    ct = args.ct
     area = 'global'
-    years = [2008, 2009]
-    months = [1]#, 2]
+    # area = 'asian monsoon'
+    # years = [2008]#, 2008, 2009, 2010]
+    # months = [2]
+    if args.year == 0:
+        years = [*range(2007,2020)]
+    else:
+        years = [args.year]
+    if args.month == 0:
+        months = [*range(1,13)]
+        ses = 'year'
+    elif args.month == -1:
+        months = [12, 1, 2]
+        ses = 'djf'
+    elif args.month == -2:
+        months = [3, 4, 5]
+        ses = 'mam'
+    elif args.month == -3:
+        months = [6, 7, 8]
+        ses = 'jja'
+    elif args.month == -4:
+        months = [9, 10, 11]
+        ses = 'son'
+    elif args.month == -5:
+        months = [3, 4, 5, 6, 7, 8]
+        ses = 'bsu'
+    elif args.month == -6:
+        months = [9, 10, 11, 12, 1, 2]
+        ses = 'bwi'
+    else:
+        months = [args.month]
+        ses = 'm%02d' %args.month
+    # months = seasons[ses]
     ticT = time.time()
     y = -1
     for year in years:
@@ -231,17 +310,19 @@ if __name__ == '__main__':
             if year in missing_months.keys():
                 if mon in missing_months[year]:
                     continue
-                   
+            print('Year = %d, Month = %02d' %(year, mon))      
             y  = y + 1
             
-            tempname = '%s/part-%d%02d-%s-%s.h5' %(tempDir, year, mon, ses, area)
             outname = 'CALIOP-EAD-%d%02d-n-DD' %(year, mon)
+            tempname = '%s/part-%d%02d-%s.h5' %(tempDir, year, mon, 'global')
+            if forced_age_bound is not None:
+                tempname = tempname.replace('.h5', '_ab-%d.h5' %forced_age_bound)
             # partDir = os.path.join('/proju/flexpart/flexpart_in/EKJ/ejohansson/flexout/STC/Calipso', outname)
             partDir = os.path.join(mainDir, outname)
             initDir = os.path.join(partDir, 'Initfiles')
-            
             if os.path.isfile(tempname) and lt:
-                qs06_mon, qs10_mon, qs12_mon, qs14_mon, qs16_mon, height_mon = readTempFile(tempname)
+                qs06_mon, qs10_mon, qs12_mon, qs13_mon, qs14_mon, qs16_mon, \
+                        height_mon, lats_mon, lons_mon, extras = readTempFile(tempname)
             else:
                 #: Read part_000 file
                 f0 = os.path.join(partDir, 'part_000')
@@ -250,45 +331,73 @@ if __name__ == '__main__':
                 catalogFile = os.path.join(initDir, 'selDardar_Calalog-%d%02d-n.pkl' %(year, mon))
                 cf = getCatalogFile(catalogFile, checkForNewFile=False)
                 #: Read out file
-                rvs, fls, age, lons, lats, temp, pres = getConvfiles(outDir, [[''], [[outname]]])
-                hits = (fls & I_HIT) == I_HIT
-                
+                rvs_mon, fls_mon, age_mon, lons_monF, lats_monF, temp_monF, pres_monF = getConvfiles(outDir, [[''], [[outname]]])
+                lons_monF = np.where(lons_monF > 180, lons_monF - 360, lons_monF)
+                lons_monF = np.where(lons_monF < -180, lons_monF + 360, lons_monF)
+                hits = (fls_mon & I_HIT) == I_HIT
+                olds = (fls_mon & I_OLD) == I_OLD
+                olds_hits = olds | hits
                 #: What inds should we use?
                 all_inds = np.ones(hits.shape).astype(bool)
                 use_inds = hits
                 #: Remove inds that has age after forced_age_bound
                 if forced_age_bound is not None:
-                    use_inds = np.where(age > forced_age_bound, False, use_inds)
+                    use_inds = np.where(age_mon > forced_age_bound, False, use_inds)
                 #: Remove inds that starts after stop_day
                 if stop_day is not None:
                     use_inds = np.where((np.abs(part0['ir_start']) > stop_day), False, use_inds)
                 
                 #: IWC is required
                 use_inds = use_inds & (cf['iwc'] > 0) 
+                olds_hits_cloudy = olds_hits & (cf['iwc'] > 0)
+                olds_hits_clear = olds_hits & (~(cf['iwc'] > 0)) 
                 #: Calc saturation
                 # rvs0O = satratio(part0['p'][use_inds], part0['t'][use_inds])
                 rvs0 = esati_murphy(part0['p'][use_inds], part0['t'][use_inds])
-                iwc0_mon = convIWC(cf['iwc'][use_inds], part0['p'][use_inds], part0['t'][use_inds], cf['sh'][use_inds])
+                iwc0 = convIWC(cf['iwc'], part0['p'], part0['t'], cf['sh'])
+                iwc0_mon = iwc0[use_inds]
                 #: Calc q0
-                # q0 = rvs0 + iwc0_mon
-                q0 = rvs0 * 1.6
-                
+                # vodinds = (cf['vod'][use_inds] < 0.03)
+                # iwcinds = (cf['iwc'][use_inds] > 0)
+                # pdb.set_trace()
+                q0 = rvs0 + iwc0_mon
+                q0_12 = rvs0 * 1.2
+                q0_16 = rvs0 * 1.6
                 #: get the desired variables and put in a 2D array
-                pMin = np.zeros([2, use_inds.sum()])
-                pMin[0, :] = part0['p'][use_inds]
-                rvsMin = np.zeros([2, use_inds.sum()])
-                rvsMin[0, :] = rvs0
-                q100 = np.zeros(use_inds.sum())
-                qs = np.zeros(use_inds.sum())
-                qsn = np.zeros(use_inds.sum())
+                # pMin = np.zeros([2, use_inds.sum()])
+                # pMin[0, :] = part0['p'][use_inds]
+                # rvsMin = np.zeros([2, use_inds.sum()])
+                # rvsMin[0, :] = rvs0
+                # q100 = np.zeros(use_inds.sum())
+                # qs = np.zeros(use_inds.sum())
+                # qsn = np.zeros(use_inds.sum())
+                
+                # if (break_point is not None) and (y==0):
+                #     lon_lat_mon = np.zeros([10, int(break_point/3) + 1])
+                #     lonlatind = np.zeros(10)
+                qs06_16_mon = np.zeros([2, use_inds.sum()]) + np.nan
+                qs08_16_mon = np.zeros([2, use_inds.sum()]) + np.nan
+                qs10_16_mon = np.zeros([2, use_inds.sum()]) + np.nan
+                qs12_16_mon = np.zeros([2, use_inds.sum()]) + np.nan
+                qs13_16_mon = np.zeros([2, use_inds.sum()]) + np.nan
+                qs14_16_mon = np.zeros([2, use_inds.sum()]) + np.nan
+                qs16_16_mon = np.zeros([2, use_inds.sum()]) + np.nan
+                
+                qs06_12_mon = np.zeros([2, use_inds.sum()]) + np.nan
+                qs08_12_mon = np.zeros([2, use_inds.sum()]) + np.nan
+                qs10_12_mon = np.zeros([2, use_inds.sum()]) + np.nan
+                qs12_12_mon = np.zeros([2, use_inds.sum()]) + np.nan
+                qs13_12_mon = np.zeros([2, use_inds.sum()]) + np.nan
+                qs14_12_mon = np.zeros([2, use_inds.sum()]) + np.nan
+                qs16_12_mon = np.zeros([2, use_inds.sum()]) + np.nan
                 
                 qs06_mon = np.zeros([2, use_inds.sum()]) + np.nan
                 qs08_mon = np.zeros([2, use_inds.sum()]) + np.nan
                 qs10_mon = np.zeros([2, use_inds.sum()]) + np.nan
                 qs12_mon = np.zeros([2, use_inds.sum()]) + np.nan
+                qs13_mon = np.zeros([2, use_inds.sum()]) + np.nan
                 qs14_mon = np.zeros([2, use_inds.sum()]) + np.nan
                 qs16_mon = np.zeros([2, use_inds.sum()]) + np.nan
-                
                 
                 
                 # qs = [[]] * use_inds.sum()
@@ -345,12 +454,24 @@ if __name__ == '__main__':
                     #: Find Change
                     # qs, qsn = findQschange(q0, rvsf, qs, qsn, (part0['idx_back'] - part0['idx_orgn']), (partf['idx_back'] - part0['idx_orgn']), use_inds, phour)
                     
-                    qs06_mon, qs10_mon, qs12_mon, qs14_mon, qs16_mon = \
-                            findFirstQschange(q0, rvsf, qs06_mon, qs10_mon, qs12_mon, qs14_mon, qs16_mon, \
+                    qs06_mon, qs10_mon, qs12_mon, qs13_mon, qs14_mon, qs16_mon = \
+                            findFirstQschange(q0, rvsf, qs06_mon, qs10_mon, qs12_mon, qs13_mon, qs14_mon, qs16_mon, \
                                               (part0['idx_back'] - part0['idx_orgn']), \
                                               (partf['idx_back'] - part0['idx_orgn']), \
                                               np.abs(partf['itime']-partf['ir_start']), \
-                                              age[use_inds], use_inds, phour)
+                                              age_mon[use_inds], use_inds, phour)
+                    qs06_12_mon, qs10_12_mon, qs12_12_mon, qs13_12_mon, qs14_12_mon, qs16_12_mon = \
+                            findFirstQschange(q0_12, rvsf, qs06_12_mon, qs10_12_mon, qs12_12_mon, qs13_12_mon, qs14_12_mon, qs16_12_mon, \
+                                              (part0['idx_back'] - part0['idx_orgn']), \
+                                              (partf['idx_back'] - part0['idx_orgn']), \
+                                              np.abs(partf['itime']-partf['ir_start']), \
+                                              age_mon[use_inds], use_inds, phour)
+                    qs06_16_mon, qs10_16_mon, qs12_16_mon, qs13_16_mon, qs14_16_mon, qs16_16_mon = \
+                            findFirstQschange(q0_16, rvsf, qs06_16_mon, qs10_16_mon, qs12_16_mon, qs13_16_mon, qs14_16_mon, qs16_16_mon, \
+                                              (part0['idx_back'] - part0['idx_orgn']), \
+                                              (partf['idx_back'] - part0['idx_orgn']), \
+                                              np.abs(partf['itime']-partf['ir_start']), \
+                                              age_mon[use_inds], use_inds, phour)
                     print("Calc time = %.02f s" %(time.time() - tic))
                     #: Check memory
                     pid = os.getpid()
@@ -361,15 +482,12 @@ if __name__ == '__main__':
                     #     print('No more values to find')
                     #     pdb.set_trace()
                     #     break
-                    
                     #: Match Indices
                     # mi = np.asarray(list((set(partf['idx_back']) & set(part0['idx_back'][hits]))))
                     # inds = np.searchsorted(part0['idx_back'][hits], mi)
                     # pdb.set_trace()
-                    
                     # if np.abs(partf['itime']) > (forced_age_bound + stop_day):
                     #     break
-                    
                     # idx_full = np.zeros(part0['idx_back'].shape[0]).astype(bool)
                     #
                     # idx_full[(partf['idx_back'] - part0['idx_orgn'])] = True
@@ -378,41 +496,168 @@ if __name__ == '__main__':
                     # if idx_full[use_inds].sum() == 0:
                     #     print('0')
                     #     pdb.set_trace()
-                    if phour >150:
-                        
-                        break
+                    if break_point is not None:
+                        if phour > break_point:
+                            break
                 # f2r = f2.replace('.gz', '')
+                partp0_p_mon = part0['p'][use_inds]
+                partp0_t_mon = part0['t'][use_inds]
                 height_mon = cf['height'][use_inds]
-                if not os.path.isfile(tempname) or ct:
+                lons_mon = lons_monF[use_inds]
+                lats_mon = lats_monF[use_inds]
+                pres_mon = pres_monF[use_inds]
+                temp_mon = temp_monF[use_inds]
+                if ct:
                     print('Create Temp File')
-                    h5file = h5py.File(tempname, 'w')
-                    h5file.create_dataset('qs06', data = qs06_mon)
-                    h5file.create_dataset('qs10', data = qs10_mon)
-                    h5file.create_dataset('qs12', data = qs12_mon)
-                    h5file.create_dataset('qs14', data = qs14_mon)
-                    h5file.create_dataset('qs16', data = qs16_mon)
-                    h5file.create_dataset('iwc0', data = iwc0_mon)
-                    h5file.create_dataset('height', data = height_mon)
-                    h5file.create_dataset('age', data = age[use_inds])
-                    h5file.create_dataset('ir_start', data = part0['ir_start'][use_inds])
-                    h5file.create_dataset('use_inds', data = use_inds)
-                    h5file.close()
+                    try:
+                        h5file = h5py.File(tempname, 'w')
+                        h5file.create_dataset('qs06', data = qs06_mon)
+                        h5file.create_dataset('qs10', data = qs10_mon)
+                        h5file.create_dataset('qs12', data = qs12_mon)
+                        h5file.create_dataset('qs13', data = qs13_mon)
+                        h5file.create_dataset('qs14', data = qs14_mon)
+                        h5file.create_dataset('qs16', data = qs16_mon)
+                        h5file.create_dataset('q0', data = q0)
+                        
+                        h5file.create_dataset('qs06_12', data = qs06_12_mon)
+                        h5file.create_dataset('qs10_12', data = qs10_12_mon)
+                        h5file.create_dataset('qs12_12', data = qs12_12_mon)
+                        h5file.create_dataset('qs13_12', data = qs13_12_mon)
+                        h5file.create_dataset('qs14_12', data = qs14_12_mon)
+                        h5file.create_dataset('qs16_12', data = qs16_12_mon)
+                        h5file.create_dataset('q0_12', data = q0_12)
+                        
+                        h5file.create_dataset('qs06_16', data = qs06_16_mon)
+                        h5file.create_dataset('qs10_16', data = qs10_16_mon)
+                        h5file.create_dataset('qs12_16', data = qs12_16_mon)
+                        h5file.create_dataset('qs13_16', data = qs13_16_mon)
+                        h5file.create_dataset('qs14_16', data = qs14_16_mon)
+                        h5file.create_dataset('qs16_16', data = qs16_16_mon)
+                        h5file.create_dataset('q0_16', data = q0_16)
+                        
+                        h5file.create_dataset('iwc0', data = iwc0_mon)
+                        h5file.create_dataset('height', data = height_mon)
+                        h5file.create_dataset('pressure', data = pres_mon)
+                        h5file.create_dataset('temperature', data = temp_mon)
+                        h5file.create_dataset('part0_p', data = partp0_p_mon)
+                        h5file.create_dataset('part0_t', data = partp0_t_mon)
+                        h5file.create_dataset('lons', data = lons_mon)
+                        h5file.create_dataset('lats', data = lats_mon)
+                        h5file.create_dataset('age', data = age_mon[use_inds])
+                        h5file.create_dataset('ir_start', data = part0['ir_start'][use_inds])
+                        h5file.create_dataset('use_inds', data = use_inds)
+                        
+                        h5file.create_dataset('ohClo_iwc0', data = iwc0[olds_hits_cloudy])
+                        h5file.create_dataset('ohClo_height', data = cf['height'][olds_hits_cloudy])
+                        h5file.create_dataset('ohClo_pressure', data = pres_monF[olds_hits_cloudy])
+                        h5file.create_dataset('ohClo_temperature', data = temp_monF[olds_hits_cloudy])
+                        h5file.create_dataset('ohClo_part0_p', data = part0['p'][olds_hits_cloudy])
+                        h5file.create_dataset('ohClo_part0_t', data = part0['t'][olds_hits_cloudy])
+                        h5file.create_dataset('ohClo_lons', data = lons_monF[olds_hits_cloudy])
+                        h5file.create_dataset('ohClo_lats', data = lats_monF[olds_hits_cloudy])
+                        h5file.create_dataset('ohClo_age', data = age_mon[olds_hits_cloudy])
+                        h5file.create_dataset('ohClo_ir_start', data = part0['ir_start'][olds_hits_cloudy])
+                        h5file.create_dataset('ohClo_use_inds', data = olds_hits_cloudy)
+                        
+                        h5file.create_dataset('ohClr_iwc0', data = iwc0[olds_hits_clear])
+                        h5file.create_dataset('ohClr_height', data = cf['height'][olds_hits_clear])
+                        h5file.create_dataset('ohClr_pressure', data = pres_monF[olds_hits_clear])
+                        h5file.create_dataset('ohClr_temperature', data = temp_monF[olds_hits_clear])
+                        h5file.create_dataset('ohClr_part0_p', data = part0['p'][olds_hits_clear])
+                        h5file.create_dataset('ohClr_part0_t', data = part0['t'][olds_hits_clear])
+                        h5file.create_dataset('ohClr_lons', data = lons_monF[olds_hits_clear])
+                        h5file.create_dataset('ohClr_lats', data = lats_monF[olds_hits_clear])
+                        h5file.create_dataset('ohClr_age', data = age_mon[olds_hits_clear])
+                        h5file.create_dataset('ohClr_ir_start', data = part0['ir_start'][olds_hits_clear])
+                        h5file.create_dataset('ohClr_use_inds', data = olds_hits_clear)
+                        
+                        h5file.close()
+                    except:
+                        print('Something wrong in H5')
+                        sys.exit()
+                        # pdb.set_trace()
+                        
             if y == 0:
                 qs06 = qs06_mon
                 qs10 = qs10_mon
                 qs12 = qs12_mon
+                qs13 = qs13_mon
                 qs14 = qs14_mon
                 qs16 = qs16_mon
                 height = height_mon
+                lats = lats_mon
+                lons = lons_mon
+                ohClo_height = extras['ohClo_height']
+                # height_ohClo = height_ohClo
+                
                 
             else:
                 qs06 = np.hstack((qs06, qs06_mon))
                 qs10 = np.hstack((qs10, qs10_mon))
                 qs12 = np.hstack((qs12, qs12_mon))
+                qs13 = np.hstack((qs13, qs13_mon))
                 qs14 = np.hstack((qs14, qs14_mon))
                 qs16 = np.hstack((qs16, qs16_mon))
                 height = np.hstack((height, height_mon))
+                lats = np.hstack((lats, lats_mon))
+                lons = np.hstack((lons, lons_mon))
+                ohClo_height = np.hstack((ohClo_height, extras['ohClo_height']))
                 
+    print('Tot calc time = %d' %(time.time() - ticT))
+    if lt == False:
+        sys.exit()
+    
+    
+    
+    
+    #: Plot height
+    inds_org = (~np.isnan(qs16[0,:])).astype(bool)
+    all_heights = [*range(14000, 20121, 180)]
+    conv = np.zeros([6, len(all_heights)-1])
+    for h in range(len(all_heights)-1):
+        total_t = (((ohClo_height*1000) >= all_heights[h]) & ((ohClo_height*1000) < all_heights[h+1])).sum()
+        inds_h = ((height*1000) >= all_heights[h]) & ((height*1000) < all_heights[h+1])
+        inds = inds_org & inds_h
+        abowe_until_hit_06 = (qs06[0, inds]==2).sum()
+        abowe_until_hit_10 = (qs10[0, inds]==2).sum()
+        abowe_until_hit_12 = (qs12[0, inds]==2).sum()
+        abowe_until_hit_13 = (qs13[0, inds]==2).sum()
+        abowe_until_hit_14 = (qs14[0, inds]==2).sum()
+        abowe_until_hit_16 = (qs16[0, inds]==2).sum()
+        
+        abowe_no_hit = (qs13[0, inds]==1).sum()
+        below_before_hit = (qs13[0, inds]==-1).sum()
+        total = abowe_until_hit_13 + abowe_no_hit + below_before_hit
+        if total != inds.sum():
+            print('strange sum')
+            pdb.set_trace()
+        total = total_t
+        conv[0, h] = abowe_until_hit_06 / total
+        conv[1, h] = abowe_until_hit_10 / total
+        conv[2, h] = abowe_until_hit_12 / total
+        conv[3, h] = abowe_until_hit_13 / total
+        conv[4, h] = abowe_until_hit_14 / total
+        conv[5, h] = abowe_until_hit_16 / total
+        
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(conv[0, :]*100, all_heights[0:-1], label='0.6')
+    ax.plot(conv[1, :]*100, all_heights[0:-1], label='1.0')
+    ax.plot(conv[2, :]*100, all_heights[0:-1], label='1.2')
+    ax.plot(conv[3, :]*100, all_heights[0:-1], label='1.3')
+    ax.plot(conv[4, :]*100, all_heights[0:-1], label='1.4')
+    ax.plot(conv[5, :]*100, all_heights[0:-1], label='1.6')
+    
+    ax.legend(fontsize='large')
+    ax.set_xlabel('Convective [%]')
+    ax.set_ylabel('Height [m]')
+    ax.set_title('Clouds with convective origion [%%], %s, %s' %(ses.title(), area.title()))
+    figname = '%s/qsn-div_height' %plotDir
+    figname = '%s_%s_%s' %(figname, ses, area.replace(' ', '_'))
+    fig.savefig('test.png')
+    
+    pdb.set_trace()
+    
     heightBoundaries = [[None, None], [14,15], [15,16], [14,16], [16, 18], [18, 20], [18,19], [19,20]]
     
     title_org = 'Histogram'
@@ -421,7 +666,8 @@ if __name__ == '__main__':
     figname_2_org = '%s/qsn-total' %plotDir
     for h1, h2 in heightBoundaries:
         if not ((h1 is None) and (h2 is None)):
-            title = title_org + ', %d - %d km' %(h1, h2)
+            # title = title_org + ', %d - %d km' %(h1, h2)
+            title = '%d - %d km' %(h1, h2)
             figname_1 = figname_1_org + '_%d-%d' %(h1, h2)
             figname_2 = figname_2_org + '_%d-%d' %(h1, h2)
             if h2 == heightBoundaries[-1][1]:
@@ -430,15 +676,31 @@ if __name__ == '__main__':
                 inds_h = (height >= h1) & (height < h2)
             inds = inds_org & inds_h
         else:
-            title = title_org
+            title = ' Above 14 km'
+            # title = title_org
             figname_1 = figname_1_org
             figname_2 = figname_2_org
             inds = inds_org
-    
+        
+        # title = '%s, %s, %s' %(title, ses.title(), area.title())
+        figname_1 = '%s_%s_%s' %(figname_1, ses, area.replace(' ', '_'))
+        figname_2 = '%s_%s_%s' %(figname_2, ses, area.replace(' ', '_'))
+        
+        #: Area
+        if area != 'global':
+            latmin = areas[area]['minLat']
+            latmax = areas[area]['maxLat']
+            lonmin = areas[area]['minLon']
+            lonmax = areas[area]['maxLon']
+            inds_lat = (lats > latmin) & (lats <= latmax)
+            inds_lon = (lons > lonmin) & (lons <= lonmax)
+            inds = inds & inds_lat & inds_lon
+        
         if inds.sum() == 0:
             continue
         abowe_until_hit_16 = (qs16[0, inds]==2).sum()
         abowe_until_hit_14 = (qs14[0, inds]==2).sum()
+        abowe_until_hit_13 = (qs13[0, inds]==2).sum()
         abowe_until_hit_12 = (qs12[0, inds]==2).sum()
         abowe_until_hit_10 = (qs10[0, inds]==2).sum()
         abowe_until_hit_06 = (qs06[0, inds]==2).sum()
@@ -446,24 +708,28 @@ if __name__ == '__main__':
         
         abowe_no_hit_16 = (qs16[0, inds]==1).sum()
         abowe_no_hit_14 = (qs14[0, inds]==1).sum()
+        abowe_no_hit_13 = (qs13[0, inds]==1).sum()
         abowe_no_hit_12 = (qs12[0, inds]==1).sum()
         abowe_no_hit_10 = (qs10[0, inds]==1).sum()
         abowe_no_hit_06 = (qs06[0, inds]==1).sum()
         
         below_before_hit_16 = (qs16[0, inds]==-1).sum()
         below_before_hit_14 = (qs14[0, inds]==-1).sum()
+        below_before_hit_13 = (qs13[0, inds]==-1).sum()
         below_before_hit_12 = (qs12[0, inds]==-1).sum()
         below_before_hit_10 = (qs10[0, inds]==-1).sum()
         below_before_hit_06 = (qs06[0, inds]==-1).sum()
         
         mean_time_16 = np.mean(qs16[1, inds][qs16[0, inds]==-1])
         mean_time_14 = np.mean(qs14[1, inds][qs14[0, inds]==-1])
+        mean_time_13 = np.mean(qs13[1, inds][qs13[0, inds]==-1])
         mean_time_12 = np.mean(qs12[1, inds][qs12[0, inds]==-1])
         mean_time_10 = np.mean(qs10[1, inds][qs10[0, inds]==-1])
         mean_time_06 = np.mean(qs06[1, inds][qs06[0, inds]==-1])
         
         total_16 = abowe_until_hit_16 + abowe_no_hit_16 + below_before_hit_16
         total_14 = abowe_until_hit_14 + abowe_no_hit_14 + below_before_hit_14
+        total_13 = abowe_until_hit_13 + abowe_no_hit_13 + below_before_hit_13
         total_12 = abowe_until_hit_12 + abowe_no_hit_12 + below_before_hit_12
         total_10 = abowe_until_hit_10 + abowe_no_hit_10 + below_before_hit_10
         total_06 = abowe_until_hit_06 + abowe_no_hit_06 + below_before_hit_06
@@ -477,65 +743,73 @@ if __name__ == '__main__':
         # ind14 = ~(np.isnan(qs14[0,:]) | (qs14[0,:]==-1))
         # ind16 = ~(np.isnan(qs16[0,:]) | (qs16[0,:]==-1))
     
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        labels = ['0.6', '1.0', '1.2', '1.4', '1.6']
+        labels = ['0.6', '1.0', '1.2', '1.3', '1.4', '1.6']
         x = np.arange(len(labels))  # the label locations
         width = 0.3  # the width of the bars
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
         # rects1 = ax.bar(x - width/2, [(qs06[0,:]==-1).sum() / (~(np.isnan(qs06[0,:]))).sum(), (qs10[0,:]==-1).sum() / (~(np.isnan(qs10[0,:]))).sum(), (qs12[0,:]==-1).sum() / (~(np.isnan(qs12[0,:]))).sum(), (qs14[0,:]==-1).sum() / (~(np.isnan(qs14[0,:]))).sum(), (qs16[0,:]==-1).sum() / (~(np.isnan(qs16[0,:]))).sum()], width, label='Below')
         # rects2 = ax.bar(x + width/2, [ind06.sum() / (~(np.isnan(qs06[0,:]))).sum(), ind10.sum() / (~(np.isnan(qs10[0,:]))).sum(), ind12.sum() / (~(np.isnan(qs12[0,:]))).sum(), ind14.sum() / (~(np.isnan(qs14[0,:]))).sum(), ind16.sum() / (~(np.isnan(qs16[0,:]))).sum()], width, label='Convective')
         # rects1 = ax.bar(x - width/2, [(~ind06).sum() / (qs06[0,:]).shape[0], (~ind10).sum() / (qs10[0,:]).shape[0], (~ind12).sum() / (qs12[0,:]).shape[0], (~ind14).sum() / (qs14[0,:]).shape[0], (~ind16).sum() / (qs16[0,:]).shape[0]], width, label='Incitu')
         # rects2 = ax.bar(x + width/2, [ind06.sum() / (qs06[0,:]).shape[0], ind10.sum() / (qs10[0,:]).shape[0], ind12.sum() / (qs12[0,:]).shape[0], ind14.sum() / (qs14[0,:]).shape[0], ind16.sum() / (qs16[0,:]).shape[0]], width, label='Convective')
         # rects3 = ax.bar(x + width/2, [np.mean(qs10[1, ind10]), np.mean(qs12[1, ind12]), np.mean(qs14[1, ind14]), np.mean(qs16[1, ind16])], width, label='Mean Time [h]')
         
-        rects1 = ax.bar(x - width/2, [abowe_until_hit_06 / total_06, abowe_until_hit_10 / total_10, abowe_until_hit_12 / total_12, abowe_until_hit_14 / total_14, abowe_until_hit_16 / total_16], width/2, label='Convective, with hit')
-        rects2 = ax.bar(x, [abowe_no_hit_06 / total_06, abowe_no_hit_10 / total_10, abowe_no_hit_12 / total_12, abowe_no_hit_14 / total_14, abowe_no_hit_16 / total_16], width/2, label='Convective, no hit')
-        rects3 = ax.bar(x + width/2, [below_before_hit_06 / total_06, below_before_hit_10 / total_10, below_before_hit_12 / total_12, below_before_hit_14 / total_14, below_before_hit_16 / total_16], width/2, label='In situ')
+        if abowe_no_hit_06 != 0:
+            rects1 = ax.bar(x - width/2, [abowe_until_hit_06 / total_06, abowe_until_hit_10 / total_10, abowe_until_hit_12 / total_12, abowe_until_hit_13 / total_13, abowe_until_hit_14 / total_14, abowe_until_hit_16 / total_16], width/2, color="b", label='Convective')
+            rects2 = ax.bar(x, [abowe_no_hit_06 / total_06, abowe_no_hit_10 / total_10, abowe_no_hit_12 / total_12, abowe_no_hit_13 / total_13, abowe_no_hit_14 / total_14, abowe_no_hit_16 / total_16], width/2, color="g", label='Convective, no hit')
+            rects3 = ax.bar(x + width/2, [below_before_hit_06 / total_06, below_before_hit_10 / total_10, below_before_hit_12 / total_12, below_before_hit_13 / total_13, below_before_hit_14 / total_14, below_before_hit_16 / total_16], width/2, color="r", label='In situ')
+        else:
+            rects1 = ax.bar(x - width/2, [abowe_until_hit_06 / total_06, abowe_until_hit_10 / total_10, abowe_until_hit_12 / total_12, abowe_until_hit_13 / total_13, abowe_until_hit_14 / total_14, abowe_until_hit_16 / total_16], width, color="b", label='Convective')
+            rects3 = ax.bar(x + width/2, [below_before_hit_06 / total_06, below_before_hit_10 / total_10, below_before_hit_12 / total_12, below_before_hit_13 / total_13, below_before_hit_14 / total_14, below_before_hit_16 / total_16], width, color="r", label='In situ')
         #-1.5 0 1.5
         
         
-        # Add counts above the two bar graphs
-        # for rect in rects2:
-        #     height = rect.get_height()
-        #     plt.text(rect.get_x() + rect.get_width() / 2.0, height, '', ha='center', va='bottom')#f'{height:.0f}', ha='center', va='bottom')
-        
-        ax.text
+        #: Add counts above the two bar graphs
+        for rect in rects1:
+            hs = rect.get_height()
+            plt.text(rect.get_x() + rect.get_width() / 2.0, hs, '%.2f' %hs, ha='center', va='bottom')#f'{height:.0f}', ha='center', va='bottom')
+        ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
+        ax.set_yticklabels(['0', '0.2', '0.4', '0.6', '0.8', '1.0'], fontsize='large')
         ax.set_xticks(x)
-        ax.set_xticklabels(labels)
-        ax.set_xlabel('Thresholds')
-        ax.set_ylabel('Num / Total')
-        ax.set_title(title)
-        ax.legend()
+        ax.set_xticklabels(labels, fontsize='large')
+        ax.set_xlabel('Thresholds', fontsize='x-large')
+        # ax.set_ylabel('%', fontsize='x-large')
+        ax.set_title(title, fontsize='x-large')
+        ax.legend(fontsize='large')
         # ax.set_title('Num of change')
         
         plt.tight_layout()
         print(figname_1)
         fig.savefig(figname_1 + '.png')
-        fig.show()
+        if 'oem-Latitude-5400' in socket.gethostname():
+            fig.show()
         
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        labels = ['0.6', '1.0', '1.2', '1.4', '1.6']
-        x = np.arange(len(labels))  # the label locations
-        width = 0.3  # the width of the bars
         
-        rects1 = ax.bar(x - width/2, [abowe_until_hit_06, abowe_until_hit_10, abowe_until_hit_12, abowe_until_hit_14, abowe_until_hit_16], width/2, label='Convective, with hit')
-        rects2 = ax.bar(x, [abowe_no_hit_06, abowe_no_hit_10, abowe_no_hit_12, abowe_no_hit_14, abowe_no_hit_16], width/2, label='Convective, no hit')
-        rects3 = ax.bar(x + width/2, [below_before_hit_06, below_before_hit_10, below_before_hit_12, below_before_hit_14, below_before_hit_16], width/2, label='In situ')
+        if abowe_no_hit_06 != 0:
+            rects1 = ax.bar(x - width/2, [abowe_until_hit_06, abowe_until_hit_10, abowe_until_hit_12, abowe_until_hit_13, abowe_until_hit_14, abowe_until_hit_16], width/2, color="b", label='Convective')
+            rects2 = ax.bar(x, [abowe_no_hit_06, abowe_no_hit_10, abowe_no_hit_12, abowe_no_hit_13, abowe_no_hit_14, abowe_no_hit_16], width/2, color="g", label='Convective, no hit')
+            rects3 = ax.bar(x + width/2, [below_before_hit_06, below_before_hit_10, below_before_hit_12, below_before_hit_13, below_before_hit_14, below_before_hit_16], width/2, color="r", label='In situ')
+        else:
+            rects1 = ax.bar(x - width/2, [abowe_until_hit_06, abowe_until_hit_10, abowe_until_hit_12, abowe_until_hit_13, abowe_until_hit_14, abowe_until_hit_16], width, color="b", label='Convective')
+            rects3 = ax.bar(x + width/2, [below_before_hit_06, below_before_hit_10, below_before_hit_12, below_before_hit_13, below_before_hit_14, below_before_hit_16], width, color="r", label='In situ')
         
         ax.text
         ax.set_xticks(x)
-        ax.set_xticklabels(labels)
-        ax.set_xlabel('Thresholds')
-        ax.set_ylabel('Num')
-        ax.set_title(title)
+        ax.set_xticklabels(labels, fontsize='large')
+        ax.set_xlabel('Thresholds', fontsize='large')
+        ax.set_ylabel('Total number', fontsize='large')
+        ax.set_title(title, fontsize='large')
         ax.legend()
         # ax.set_title('Num of change')
         
         plt.tight_layout()
         print(figname_2)
         fig.savefig(figname_2 + '.png')
-        fig.show()
+        if 'oem-Latitude-5400' in socket.gethostname():
+            fig.show()
         
     
     
