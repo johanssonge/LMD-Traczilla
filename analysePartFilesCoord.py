@@ -23,10 +23,11 @@ import datetime
 import h5py  # @UnresolvedImport
 from matplotlib import pyplot as plt
 import cartopy.crs as ccrs
+import socket
 
 # from analyseTraczilla import getConvfiles, I_HIT, I_OLD, readCatalogFile, getCatalogFile
 
-sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
+# sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
 from io107 import readidx107
 
 dateWithNans = {'20200111': '20200113_003758', \
@@ -38,8 +39,11 @@ dateWithNans = {'20200111': '20200113_003758', \
 
 
 if __name__ == '__main__':
-    mainDIr = '/proju/flexpart/flexpart_in/EKJ/ejohansson/flexout'
-    # mainDIr = '/home/ejohansson/Projects/LMD-Traczilla'
+    
+    if 'ciclad' in socket.gethostname():
+        mainDIr = '/proju/flexpart/flexpart_in/EKJ/ejohansson/flexout'
+    elif 'oem-Latitude-5400' in socket.gethostname():
+        mainDIr = '/home/ejohansson/Projects/LMD-Traczilla'
     mainDIr = mainDIr + '/Coord'
     
     outputHour = 1
@@ -63,6 +67,7 @@ if __name__ == '__main__':
     days.sort()
     # days = [20200113]#, 20200113]
     # days = [20191216]
+    days = [20211124]    
     ticT = time.time()
     d = 0
     for day in days:
@@ -83,7 +88,7 @@ if __name__ == '__main__':
         pfiles = glob.glob(partDir + '/part_*')
         pfi = []
         for pf in pfiles:
-            pfi.append(int(pf.split('part_')[-1]))
+            pfi.append(int(pf.replace('.gz', '').split('part_')[-1]))
         pind = np.argsort(pfi)
         pfiles = np.asarray(pfiles)[pind][1:]
         
@@ -184,7 +189,9 @@ if __name__ == '__main__':
         tic = time.time()
         fig = plt.figure()
         ax = fig.add_subplot(111,projection=ccrs.PlateCarree())
-        if int(str(day)[0:4]) in [2020]: 
+        if day in [20211124]:
+            ax.set_extent([0, 180, -45, 45], crs=ccrs.PlateCarree())
+        elif int(str(day)[0:4]) in [2020]: 
             ax.set_extent([-135, -45, -45, 45], crs=ccrs.PlateCarree())
         elif int(str(day)[0:4]) in [2021]: 
             ax.set_extent([-180, 180, -45, 45], crs=ccrs.PlateCarree())
@@ -222,6 +229,17 @@ if __name__ == '__main__':
         # for tr in range(3):#lons_plot.shape[0]):
         #     plt.plot([lons_plot[tr, 0:-1], lons_plot[tr, 1:]], [lats[tr, 0:-1], lats[tr, 1:]],
         #          linewidth=1, transform=ccrs.Geodetic(), color=colours[tr])
+        
+        ax.set_yticks([-45, 0, 45], crs=ccrs.PlateCarree())
+        # ax.set_yticklabels([-45, 0, 45], fontsize='large')
+        # ax.set_yticklabels([r'$%d\degree S$' %-45, r'$0\degree$', r'$%d\degree N$' %(45)])
+        
+        ax.set_xticks([ax.get_extent()[0], np.mean((np.mean(ax.get_extent()[0:2]), ax.get_extent()[0])), np.mean(ax.get_extent()[0:2]), np.mean((np.mean(ax.get_extent()[0:2]), ax.get_extent()[1])), ax.get_extent()[1]], crs=ccrs.PlateCarree())
+        # ax.set_xticklabels([ax.get_extent()[0], np.mean((np.mean(ax.get_extent()[0:2]), ax.get_extent()[0])), np.mean(ax.get_extent()[0:2]), np.mean((np.mean(ax.get_extent()[0:2]), ax.get_extent()[1])), ax.get_extent()[1]], fontsize='large')
+        # ax.set_xticklabels([r'$%d\degree S$' %-45, r'$0\degree$', r'$%d\degree N$' %(45)])
+        ax.set_ylabel('Latitude')#, fontsize='large')
+        ax.set_xlabel('Longitude')#, fontsize='large')
+        ax.tick_params(axis=u'both', which=u'both',length=0)
         plt.tight_layout()
         figname = '%s/traj_%i' %(plotDir, day)
         fig.savefig(figname + '.png')
