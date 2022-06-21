@@ -28,7 +28,7 @@ import pickle
 import gzip
 import flammkuchen as fk  # @UnresolvedImport
 
-sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
+# sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
 from io107 import readidx107
 
 I_DEAD = 0x200000 #: Dead
@@ -38,16 +38,22 @@ I_DBORNE =  0x1000000 #: Lost after first step
 I_OLD = 0x800000 #: Reached end of time without encounter a cloud
 I_STOP = I_HIT + I_DEAD
 
-areas = {'Asia': {'minLat': -30, 'maxLat': 20, 'minLon': 80, 'maxLon': 150}, \
-         'Asian Monsoon': {'minLat': -30, 'maxLat': 30, 'minLon': 150, 'maxLon': 180}, \
-         'Anticyclone (AMA)': {'minLat': 20, 'maxLat': 30, 'minLon': -50, 'maxLon': 150}, \
-         'Pacific': {'minLat': -30, 'maxLat': 30, 'minLon': -180, 'maxLon': -115}, \
-         'Central America': {'minLat': -30, 'maxLat': 30, 'minLon': -115, 'maxLon': -40}, \
-         'Atlantic': {'minLat': -30, 'maxLat': 30, 'minLon': 150, 'maxLon': 180}, \
-         'Africa': {'minLat': -30, 'maxLat': 20, 'minLon': 150, 'maxLon': 180}}
+# areas = {'asia': {'minLat': -30, 'maxLat': 20, 'minLon': 80, 'maxLon': 150}, \
+#          'asian monsoon': {'minLat': -30, 'maxLat': 30, 'minLon': 150, 'maxLon': 180}, \
+#          'anticyclone (AMA)': {'minLat': 20, 'maxLat': 30, 'minLon': -50, 'maxLon': 150}, \
+#          'pacific': {'minLat': -30, 'maxLat': 30, 'minLon': -180, 'maxLon': -115}, \
+#          'central america': {'minLat': -30, 'maxLat': 30, 'minLon': -115, 'maxLon': -40}, \
+#          'atlantic': {'minLat': -30, 'maxLat': 30, 'minLon': 150, 'maxLon': 180}, \
+#          'africa': {'minLat': -30, 'maxLat': 20, 'minLon': 150, 'maxLon': 180}}
+areas = {'asia': {'minLat': -30, 'maxLat': 20, 'minLon': 80, 'maxLon': 150}, \
+         'asian monsoon': {'minLat': -20, 'maxLat': 40, 'minLon': 65, 'maxLon': 95}, \
+         'anticyclone (AMA)': {'minLat': 20, 'maxLat': 30, 'minLon': -50, 'maxLon': 150}, \
+         'pacific': {'minLat': -30, 'maxLat': 30, 'minLon': -180, 'maxLon': -115}, \
+         'central america': {'minLat': -30, 'maxLat': 30, 'minLon': -115, 'maxLon': -40}, \
+         'atlantic': {'minLat': -30, 'maxLat': 30, 'minLon': 150, 'maxLon': 180}, \
+         'africa': {'minLat': -30, 'maxLat': 20, 'minLon': 150, 'maxLon': 180}}
                   
                    
-                   # Asian Monsoon 20–30◦ N 50◦ W–150◦ E  Pacific 30◦ S–30◦ N 180–115◦ W Central America 30◦ S–30◦ N 115–40◦ W Africa 30◦ S–30◦ N 40◦ W–50◦ E 30◦ S–20◦ N 50–80◦ E}
 
 
 seasons = {'year': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 'djf': [12, 1, 2], 'mam': [3, 4, 5], 'jja': [6, 7, 8], 'son': [9, 10, 11]}
@@ -302,18 +308,25 @@ def getCatalogFile(fn, p0=None, checkForNewFile=True):
     return retv
 
 
-def getInitfiles(mD, years, months, dn, uD, lt=True):
-    if (not isinstance(years, list)) or (not isinstance(months, list)):
+def getInitfiles(mD, years, se, dn, uD, lt=True):
+    if (not isinstance(years, list)):# or (not isinstance(months, list)):
         print('Wrong type')
         pdb.set_trace()
     j = -1
+    if isinstance(se, int):
+        months = [se]
+    else:
+        months = seasons[se]
+    
     for y in years:
         j = j + 1
         #: Decide the name for tempfile
-        if (len(months) == 12):
+        if not isinstance(se, int): #(len(months) == 12):
             tempname = os.path.join(mD,'TempFiles', 'CALIOP-EAD-%d-%s' %(y, dn))
             if uD:
                 tempname = tempname + '-DD'
+            # if not ((se=='year') and (year == 2009)):
+            tempname = tempname + '-%s' %se
             tempname = tempname + '-init'
             loadname = tempname + '-param.h5'
             # loadname = tempname + '.npy'
@@ -334,11 +347,11 @@ def getInitfiles(mD, years, months, dn, uD, lt=True):
             i = -1
             outnamesTL = []
             for m in months:
-                if m in missing_months.keys():
+                if y in missing_months.keys():
                     if m in missing_months[y]:
                         continue
                 i = i + 1
-                #: Directories of the backward trajectories and name of the output file
+                #: Directories of the backward trajectories and name of the output file 77193056,
                 outname = 'CALIOP-EAD-%d%02d-%s' %(y, m, dn)
                 if uD:
                     outname = outname + '-DD'
@@ -397,12 +410,14 @@ def getInitfiles(mD, years, months, dn, uD, lt=True):
             outnames = [[tempname], [outnamesTL]]
         else:
             for arname in retvP.keys():
-                if isinstance(retvP[arname], int):
+                if isinstance(retvP[arname], int) or isinstance(retvP[arname], np.int64):
                     retvP[arname] = [retvP[arname]]
-                if isinstance(retvPL[arname], int):
+                if isinstance(retvPL[arname], int) or isinstance(retvPL[arname], np.int64):
                     retvPL[arname] = [retvPL[arname]]
-                retvP[arname] = np.concatenate((np.asarray(retvP[arname]), np.asarray(retvPL[arname])))
-            
+                try:
+                    retvP[arname] = np.concatenate((np.asarray(retvP[arname]), np.asarray(retvPL[arname])))
+                except:
+                    pdb.set_trace()
             for arname in retvC.keys():
                 if isinstance(retvC[arname], int):
                     retvC[arname] = [retvC[arname]]
@@ -562,9 +577,15 @@ if __name__ == '__main__':
     
     
     compare = False
-    year = [2007]#, 2008, 2009]#, 2008, 2009, 2010]
+    year = [2007, 2008, 2009, 2010]#, 2008, 2009, 2010]
     # month = [2]#[1, 2, 3, 4]
-    month = [*range(1, 13)]
+    #'year', 'dkf', 'mam', 'jja', 'son'
+    ses = 'year'#'mam'#'year'
+    area = 'global'
+    if ses == 'year':
+        year = [2008]
+    
+    
     dn = 'n'
     useDardar = True
     lt = True
@@ -575,7 +596,7 @@ if __name__ == '__main__':
     #     outnames = outnames + '-DD'
     print('Read Init-files')
     tic = time.time()
-    part0, catalog, params, outnames = getInitfiles(mainDir, year, month, dn, useDardar, lt=lt)
+    part0, catalog, params, outnames = getInitfiles(mainDir, year, ses, dn, useDardar, lt=lt)
     print('It took %d sec to read Init-files' %(time.time() - tic))
     #: Read the index file that contains the initial positions
     # print('numpart',part0['numpart'])
@@ -592,14 +613,13 @@ if __name__ == '__main__':
     hits = (fls & I_HIT) == I_HIT
     
     lons = checkLons(lons, hits)
-    
     if False:
         lons = normalizeLons(lons, lats)
         lons_0 = normalizeLons(lons_0, lats_0)
     # originDate, idxDates = getDates(part0, hits)
     # cloudy = (catalog['CM'] > 0)
     # cloudy = ((catalog['SC']>0) & (catalog['SC']<5))
-    cloudy = (catalog['vod'] > 0)
+    cloudy = (catalog['vod'] > 0)# & (catalog['iwc'] > 0)
     cloudy_thin = cloudy & (catalog['vod'] < 0.03)
     hits_cld = hits & cloudy
     hits_clr = hits & ~cloudy
@@ -647,95 +667,101 @@ if __name__ == '__main__':
     for ctyp in ['all', 'cld', 'cld_thin', 'clr']:
         if ctyp == 'all':
             title_org = '2D Age - Hits pixels'
-            figname_org = '%s/2dhist_height_hits_all' %plotDir
+            figname_org = '%s/2dhist_height_%s_%s_hits_all' %(plotDir, ses, area.replace(' ', '_'))
             inds_org = hits
             vmax = 100000
         elif ctyp == 'cld':
             title_org = '2D Age - Hits and Cloudy pixels'
-            figname_org = '%s/2dhist_height_hits_cld' %plotDir
+            figname_org = '%s/2dhist_height_%s_%s_hits_cld' %(plotDir, ses, area.replace(' ', '_'))
             inds_org = hits_cld
             vmax = 100000
         elif ctyp == 'cld_thin':
             title_org = '2D Age - Hits and Thin Cloudy pixels'
-            figname_org = '%s/2dhist_height_hits_cld_thin' %plotDir
+            figname_org = '%s/2dhist_height_%s_%s_hits_cld_thin' %(plotDir, ses, area.replace(' ', '_'))
             inds_org = hits_cldt
             vmax = 10000
         elif ctyp == 'clr':
             title_org = '2D Hist - Hits and Clear pixels'
-            figname_org = '%s/2dhist_height_hits_clr' %plotDir
+            figname_org = '%s/2dhist_height_%s_%s_hits_clr' %(plotDir, ses, area.replace(' ', '_'))
             inds_org = hits_clr
             vmax = 50000
         inds = inds_org
+        if inds.sum() == 0:
+            continue
         figname = figname_org
         title = title_org
         fig = plt.figure()
         ax = fig.add_subplot(111)
         hh = ax.hist2d(age[inds] / 86400, catalog['height'][inds], bins=[100, 10], vmin=0, vmax=vmax)#, bins=400)
-        ax.set_ylabel('Height')
-        ax.set_xlabel('Age [days]')
-        ax.set_title(title)
+        ax.set_ylabel('Height [km]', fontsize='x-large')
+        ax.set_xlabel('Age [days]', fontsize='x-large')
+        # ax.set_title(title)
+        # plt.rcParams.update({'font.size': 22})
         fig.subplots_adjust(right=0.89)
         # cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
         cbar = fig.colorbar(hh[3])#, cax=cbar_ax)
         fig.savefig(figname + '.png')
     
-    #: https://stackoverflow.com/questions/50611018/cartopy-heatmap-over-openstreetmap-background/50638691
     heightBoundaries = [[None, None], [14,16], [16, 18], [18, 20], [18,19], [19,20]]
-    print('Plot Age Histograms')
-    for ctyp in ['all', 'cld', 'cld_thin', 'clr']:
-        if ctyp == 'all':
-            title_org = 'Hits pixels'
-            figname_org = '%s/hist_age_all' %plotDir
-            inds_org = hits
-        elif ctyp == 'cld':
-            title_org = 'Hits and Cloudy pixels'
-            figname_org = '%s/hist_age_cld' %plotDir
-            inds_org = hits_cld
-        elif ctyp == 'cld_thin':
-            title_org = 'Hits and Thin Cloudy pixels'
-            figname_org = '%s/hist_age_cld_thin' %plotDir
-            inds_org = hits_cldt
-        elif ctyp == 'clr':
-            title_org = 'Hits pixels Clear pixels'
-            figname_org = '%s/hist_age_clr' %plotDir
-            inds_org = hits_clr
-        
-        for h1, h2 in heightBoundaries:
-            if not ((h1 is None) and (h2 is None)):
-                title = title_org + ', %d - %d km' %(h1, h2)
-                figname = figname_org + '_%d-%d' %(h1, h2)
-                if h2 == heightBoundaries[-1][1]:
-                    inds_h = (catalog['height'] >= h1) & (catalog['height'] <= h2)
+    if False:
+        #: https://stackoverflow.com/questions/50611018/cartopy-heatmap-over-openstreetmap-background/50638691
+        print('Plot Age Histograms')
+        for ctyp in ['all', 'cld', 'cld_thin', 'clr']:
+            if ctyp == 'all':
+                title_org = 'Hits pixels'
+                figname_org = '%s/hist_age_%s_%s_hits_all' %(plotDir, ses, area.replace(' ', '_'))
+                inds_org = hits
+            elif ctyp == 'cld':
+                title_org = 'Hits and Cloudy pixels'
+                figname_org = '%s/hist_age_%s_%s_hits_cld' %(plotDir, ses, area.replace(' ', '_'))
+                inds_org = hits_cld
+            elif ctyp == 'cld_thin':
+                title_org = 'Hits and Thin Cloudy pixels'
+                figname_org = '%s/hist_age_%s_%s_hits_cld_thin' %(plotDir, ses, area.replace(' ', '_'))
+                inds_org = hits_cldt
+            elif ctyp == 'clr':
+                title_org = 'Hits pixels Clear pixels'
+                figname_org = '%s/hist_age_%s_%s_hits_clr' %(plotDir, ses, area.replace(' ', '_'))
+                inds_org = hits_clr
+            
+            for h1, h2 in heightBoundaries:
+                if not ((h1 is None) and (h2 is None)):
+                    title = title_org + ', %d - %d km' %(h1, h2)
+                    figname = figname_org + '_%d-%d' %(h1, h2)
+                    if h2 == heightBoundaries[-1][1]:
+                        inds_h = (catalog['height'] >= h1) & (catalog['height'] <= h2)
+                    else:
+                        inds_h = (catalog['height'] >= h1) & (catalog['height'] < h2)
+                    inds = inds_org & inds_h
                 else:
-                    inds_h = (catalog['height'] >= h1) & (catalog['height'] < h2)
-                inds = inds_org & inds_h
-            else:
-                title = title_org
-                figname = figname_org
-                inds = inds_org
-                
-            #: --- Plot ---
-            fig = plt.figure()
-            ax = fig.add_subplot(2,1,1)
-            # fig.suptitle('Age histogram')
-            h = ax.hist(age[inds] / 86400, bins=400)#, density=True)
-            # h = ax.hist(age[hits] / 86400, bins=np.logspace(np.log10(0.001),np.log10(42.0), 400))#bins=400)#, density=True)
-            # ax.set_xscale('log')
-            # fig.gca().set_xscale("log")
-            # ax.set_xlabel('Age [days]')
-            ax.set_title(title)
-            ax.text(0.7, 0.9,'total = %d' %inds.sum(),
-                    horizontalalignment='center',
-                    verticalalignment='center',
-                    transform = ax.transAxes)
-            ax = fig.add_subplot(2,1,2)
-            h = ax.hist(age[inds] / 86400, bins=400)#, density=True)
-            ax.set_yscale('log')
-            ax.set_xlabel('Age [days]')
-            # ax.set_title('Hits pixels')
-            plt.tight_layout()
-            fig.savefig(figname + '.png')
-            plt.close(fig)
+                    title = title_org
+                    figname = figname_org
+                    inds = inds_org
+                if inds.sum() == 0:
+                    continue
+                   
+                #: --- Plot ---
+                fig = plt.figure()
+                ax = fig.add_subplot(2,1,1)
+                # fig.suptitle('Age histogram')
+                h = ax.hist(age[inds] / 86400, bins=400)#, density=True)
+                # h = ax.hist(age[hits] / 86400, bins=np.logspace(np.log10(0.001),np.log10(42.0), 400))#bins=400)#, density=True)
+                # ax.set_xscale('log')
+                # fig.gca().set_xscale("log")
+                # ax.set_xlabel('Age [days]')
+                ax.set_title(title)
+                ax.text(0.7, 0.9,'total = %d' %inds.sum(),
+                        horizontalalignment='center',
+                        verticalalignment='center',
+                        transform = ax.transAxes)
+                ax = fig.add_subplot(2,1,2)
+                h = ax.hist(age[inds] / 86400, bins=400)#, density=True)
+                ax.set_yscale('log')
+                ax.set_xlabel('Age [days]')
+                # ax.set_title('Hits pixels')
+                plt.tight_layout()
+                fig.savefig(figname + '.png')
+                plt.close(fig)
     # pdb.set_trace()
 
     # #: --- Plot ---
@@ -802,7 +828,7 @@ if __name__ == '__main__':
         plt.plot([lons[hits][0::step], lons_0[hits][0::step]], [lats[hits][0::step], lats_0[hits][0::step]],
              linewidth=1, transform=ccrs.Geodetic())
         plt.tight_layout()
-        fig.savefig('%s/traj.png' %plotDir)
+        fig.savefig('%s/traj.png' %(plotDir))
         toc = time.time()
         print(toc-tic)
     
@@ -825,10 +851,10 @@ if __name__ == '__main__':
     ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
     ax.coastlines()
     ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
-    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax], fontsize='large')
     ax.tick_params(axis=u'both', which=u'both',length=0)
     im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])#, vmin=vmin, vmax=vmax)
-    ax.set_title('Trazilla')
+    ax.set_title('Trazilla', fontsize='x-large')
     # gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True, x_inline=False, y_inline=False)#, linewidth=0.001, color='k',alpha=0)
     # gl.right_labels = gl.top_labels = gl.bottom_labels = gl.ylines = gl.xlines = False
     # gl.ylocator = ticker.FixedLocator([-1*ymax+1, -1*ymax//2, 0, ymax//2, ymax-1])
@@ -843,9 +869,9 @@ if __name__ == '__main__':
     ax.coastlines()
     im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])#, vmin=vmin, vmax=vmax)
     ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
-    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
+    ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax], fontsize='large')
     ax.tick_params(axis=u'both', which=u'both',length=0)
-    ax.set_title('Dardar')
+    ax.set_title('Dardar', fontsize='x-large')
     fig.subplots_adjust(right=0.89)
     # cbar_ax = fig.add_axes([0.90, 0.06, 0.01, 0.40])
     cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
@@ -853,7 +879,7 @@ if __name__ == '__main__':
     # fig.tight_layout(rect=[0, 0.03, 0.97, 0.97])
     # fig.tight_layout(rect=[0, 0.03, 1, 0.95])
     # plt.tight_layout()
-    figname = '%s/2dhist_all' %plotDir
+    figname = '%s/2dhist_%s_%s_all' %(plotDir, ses, area.replace(' ', '_'))
     fig.savefig(figname + '.png')
     
     #: --- Plot ---
@@ -862,19 +888,19 @@ if __name__ == '__main__':
     for ctyp in ['all', 'cld', 'cld_thin', 'clr']:
         if ctyp == 'all':
             title_org = '2D Hist - Hits pixels'
-            figname_org = '%s/2dhist_hits_all' %plotDir
+            figname_org = '%s/2dhist_%s_%s_hits_all' %(plotDir, ses, area.replace(' ', '_'))
             inds_org = hits
         elif ctyp == 'cld':
             title_org = '2D Hist - Hits and Cloudy pixels'
-            figname_org = '%s/2dhist_hits_cld' %plotDir
+            figname_org = '%s/2dhist_%s_%s_hits_cld' %(plotDir, ses, area.replace(' ', '_'))
             inds_org = hits_cld
         elif ctyp == 'cld_thin':
             title_org = '2D Hist - Hits and Thin Cloudy pixels'
-            figname_org = '%s/2dhist_hits_cld_thin' %plotDir
+            figname_org = '%s/2dhist_%s_%s_hits_cld_thin' %(plotDir, ses, area.replace(' ', '_'))
             inds_org = hits_cldt
         elif ctyp == 'clr':
             title_org = '2D Hist - Hits and Clear pixels'
-            figname_org = '%s/2dhist_hits_clr' %plotDir
+            figname_org = '%s/2dhist_%s_%s_hits_clr' %(plotDir, ses, area.replace(' ', '_'))
             inds_org = hits_clr
         #: Height
         for h1, h2 in heightBoundaries:
@@ -890,6 +916,8 @@ if __name__ == '__main__':
                 title = title_org
                 figname = figname_org
                 inds = inds_org
+            if inds.sum() == 0:
+                continue
             #: 2D Histogram
             hh1, xedges1, yedges1 = np.histogram2d(lons[inds], lats[inds], bins=[180, 90])
             hh2, xedges2, yedges2 = np.histogram2d(lons_0[inds], lats_0[inds], bins=[180, 90])
@@ -932,19 +960,19 @@ if __name__ == '__main__':
     for ctyp in ['all', 'cld', 'cld_thin', 'clr']:
         if ctyp == 'all':
             title_org = '2D Hist - Old pixels'
-            figname_org = '%s/2dhist_olds_all' %plotDir
+            figname_org = '%s/2dhist_%s_%s_olds_all' %(plotDir, ses, area.replace(' ', '_'))
             inds_org = olds
         elif ctyp == 'cld':
             title_org = '2D Hist - Old and Cloudy pixels'
-            figname_org = '%s/2dhist_olds_cld' %plotDir
+            figname_org = '%s/2dhist_%s_%s_olds_cld' %(plotDir, ses, area.replace(' ', '_'))
             inds_org = olds_cld
         elif ctyp == 'cld_thin':
             title_org = '2D Hist - Old and Thin Cloudy pixels'
-            figname_org = '%s/2dhist_olds_cld_thin' %plotDir
+            figname_org = '%s/2dhist_%s_%s_olds_cld_thin' %(plotDir, ses, area.replace(' ', '_'))
             inds_org = olds_cldt
         elif ctyp == 'clr':
             title_org = '2D Hist - Old and Clear pixels'
-            figname_org = '%s/2dhist_olds_clr' %plotDir
+            figname_org = '%s/2dhist_%s_%s_olds_clr' %(plotDir, ses, area.replace(' ', '_'))
             inds_org = olds_clr
         #: Height
         for h1, h2 in heightBoundaries:
@@ -960,6 +988,8 @@ if __name__ == '__main__':
                 title = title_org
                 figname = figname_org
                 inds = inds_org
+            if inds.sum() == 0:
+                continue
             #: 2D Histogram
             hh1, xedges1, yedges1 = np.histogram2d(lons[inds], lats[inds], bins=[180, 90])
             hh2, xedges2, yedges2 = np.histogram2d(lons_0[inds], lats_0[inds], bins=[180, 90])
@@ -991,11 +1021,11 @@ if __name__ == '__main__':
             fig.subplots_adjust(right=0.89)
             cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
             cbar = fig.colorbar(im2, cax=cbar_ax)
-            # figname = '%s/2dhist_olds_all' %plotDir
+            # figname = '%s/2dhist_olds_all' %(plotDir, ses, area.replace(' ', '_'))
             fig.savefig(figname + '.png') 
             plt.close(fig)
     
-    
+    pdb.set_trace()
     
 #     hh1, xedges1, yedges1 = np.histogram2d(lons[hits], lats[hits], bins=[180, 90])
 #     hh2, xedges2, yedges2 = np.histogram2d(lons_0[hits], lats_0[hits], bins=[180, 90])#, bins=400)#, density=True)
