@@ -118,7 +118,6 @@ def readidx107(fname, quiet=False):
         if not quiet: print(data['lhead'], data['outnfmt'], data['mode'])
         raise ValueError('UNKNOWN FILE FORMAT')
 
-
     # Get stamp_date (Format YYYYMMDDHHmmss), itime (output time)
     # and step (time step)
     fid.read(4)  # first fortran record word (normaly 4 characters, char)
