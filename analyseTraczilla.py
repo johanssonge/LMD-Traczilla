@@ -30,12 +30,12 @@ import flammkuchen as fk  # @UnresolvedImport
 
 # sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
 from io107 import readidx107
-
-I_DEAD = 0x200000 #: Dead
-I_HIT = 0x400000 #: Hit a cloud
-I_CROSSED = 0x2000000 #: outside domain
-I_DBORNE =  0x1000000 #: Lost after first step
-I_OLD = 0x800000 #: Reached end of time without encounter a cloud
+from convsrcErikFullGridSatTropo import I_HIT, I_OLD, I_DEAD, I_CROSSED, I_DBORNE
+# I_DEAD = 0x200000 #: Dead
+# I_HIT = 0x400000 #: Hit a cloud
+# I_CROSSED = 0x2000000 #: outside domain
+# I_DBORNE =  0x1000000 #: Lost after first step
+# I_OLD = 0x800000 #: Reached end of time without encounter a cloud
 I_STOP = I_HIT + I_DEAD
 
 # areas = {'asia': {'minLat': -30, 'maxLat': 20, 'minLon': 80, 'maxLon': 150}, \
@@ -51,12 +51,13 @@ areas = {'asia': {'minLat': -30, 'maxLat': 20, 'minLon': 80, 'maxLon': 150}, \
          'pacific': {'minLat': -30, 'maxLat': 30, 'minLon': -180, 'maxLon': -115}, \
          'central america': {'minLat': -30, 'maxLat': 30, 'minLon': -115, 'maxLon': -40}, \
          'atlantic': {'minLat': -30, 'maxLat': 30, 'minLon': 150, 'maxLon': 180}, \
-         'africa': {'minLat': -30, 'maxLat': 20, 'minLon': 150, 'maxLon': 180}}
-                  
-                   
-
-
-seasons = {'year': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 'djf': [12, 1, 2], 'mam': [3, 4, 5], 'jja': [6, 7, 8], 'son': [9, 10, 11]}
+         'africa': {'minLat': -30, 'maxLat': 20, 'minLon': 150, 'maxLon': 180}, \
+         'nino3':{'minLat': -5, 'maxLat': 5, 'minLon': -150, 'maxLon': -90}, \
+         'nino4':{'minLat': -5, 'maxLat': 5, 'minLon': 150, 'maxLon': 180, 'minLonD': -180, 'maxLonD': -150}, \
+         'nino34':{'minLat': -5, 'maxLat': 5, 'minLon': 150, 'maxLon': 180, 'minLonD': -180, 'maxLonD': -90}}
+        
+seasons = {'year': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 'djf': [12, 1, 2], 'mam': [3, 4, 5], \
+           'jja': [6, 7, 8], 'son': [9, 10, 11], 'sum': [3, 4, 5, 6, 7, 8], 'win': [9, 10, 11, 12, 1, 2]}
 
 missing_months = {2007: [1,2], 2011: [1, 5, 6, 7, 8, 9, 10, 11, 12], 2012: [1, 2, 3, 4], 2016: [2], 2017: [7], 2018: [1, 2, 3, 4, 5], 2019: [7, 8, 9, 10, 11, 12]}
 magic = 0.84
