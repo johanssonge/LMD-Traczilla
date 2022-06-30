@@ -22,7 +22,6 @@ import time
 import psutil  # @UnresolvedImport
 from matplotlib import pyplot as plt  # @UnresolvedImport
 
-from analyseTraczilla import getConvfiles, I_HIT, I_OLD, getCatalogFile, missing_months, seasons, areas
 # from convsrcErikFullGridSatTropo import satratio
 import glob
 import h5py  # @UnresolvedImport
@@ -32,6 +31,8 @@ import socket
 
 # sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
 from io107 import readidx107
+from analyseTraczilla import getConvfiles, getCatalogFile, missing_months, seasons, areas
+from convsrcErikFullGridSatTropo import I_HIT, I_OLD, I_DEAD, I_CROSSED, I_DBORNE
 
 # Calculation of the saturation mixing ratio from actual temperature and pressure
 def satratio2(p,T):
@@ -195,6 +196,44 @@ def findFirstQschange(qo, qf, q06, q10, q12, q13, q14, q16, p0IF, ppIF, tss, age
     return q06, q10, q12, q13, q14, q16
     
 
+def calcProcHeight(q06, q10, q12, q13, q14, q16, ohClo_h, height, rh=False):
+    all_heights = [*range(14000, 20121, 180)]
+    inds_org = (~np.isnan(q16[0,:])).astype(bool)
+    conv = np.zeros([6, len(all_heights)-1])
+    for h in range(len(all_heights)-1):
+        total_t = (((ohClo_h*1000) >= all_heights[h]) & ((ohClo_h*1000) < all_heights[h+1])).sum()
+        inds_h = ((height*1000) >= all_heights[h]) & ((height*1000) < all_heights[h+1])
+        inds = inds_org & inds_h
+        abowe_until_hit_06 = (q06[0, inds]==2).sum()
+        abowe_until_hit_10 = (q10[0, inds]==2).sum()
+        abowe_until_hit_12 = (q12[0, inds]==2).sum()
+        abowe_until_hit_13 = (q13[0, inds]==2).sum()
+        abowe_until_hit_14 = (q14[0, inds]==2).sum()
+        abowe_until_hit_16 = (q16[0, inds]==2).sum()
+    
+        # abowe_no_hit = (qs13[0, inds]==1).sum()
+        # below_before_hit = (qs13[0, inds]==-1).sum()
+        # total = abowe_until_hit_13 + abowe_no_hit + below_before_hit
+        # if total != inds.sum():
+        #     print('strange sum')
+        #     pdb.set_trace()
+    
+        if total_t == 0:
+            total = np.nan
+        else:
+            total = total_t
+        conv[0, h] = abowe_until_hit_06 / total
+        conv[1, h] = abowe_until_hit_10 / total
+        conv[2, h] = abowe_until_hit_12 / total
+        conv[3, h] = abowe_until_hit_13 / total
+        conv[4, h] = abowe_until_hit_14 / total
+        conv[5, h] = abowe_until_hit_16 / total
+    if rh:
+        return conv, all_heights
+    else:
+        return conv
+
+
 def readTempFile(fn):
     h5f = h5py.File(fn, 'r')   
     q10 = h5f['qs10'][:]
@@ -206,9 +245,11 @@ def readTempFile(fn):
     h = h5f['height'][:]
     lat = h5f['lats'][:]
     lon = h5f['lons'][:]
-    'ohClr_height'
+    # 'ohClr_height'
     extras = {'use_inds': h5f['use_inds'][:], 'ohClo_use_inds': h5f['ohClo_use_inds'][:], 'ohClr_use_inds': h5f['ohClr_use_inds'][:], \
-              'ohClo_height': h5f['ohClo_height'][:], 'ohClr_height': h5f['ohClr_height'][:]}
+              'ohClo_height': h5f['ohClo_height'][:], 'ohClr_height': h5f['ohClr_height'][:], \
+              'ohClo_lats': h5f['ohClo_lats'][:], 'ohClo_lons': h5f['ohClo_lons'][:], \
+              'iwc0': h5f['iwc0'][:], 'age': h5f['age'][:]}
     h5f.close()
     return q06, q10, q12, q13, q14, q16, h, lat, lon, extras
     
@@ -218,12 +259,26 @@ def readTempFile(fn):
     
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser()
+    from argparse import RawTextHelpFormatter
+    parser = argparse.ArgumentParser(description='Program to calculate backvards through part files to find supersaturation', formatter_class=RawTextHelpFormatter)
     parser.add_argument("-c", "--ct", action='store_false', default = True, 
                         help = "Create Temp Files, only valid if no temp file is loaded. Default = True")
     parser.add_argument("-l", "--lt", action='store_false', default = True, 
                         help = "Load Temp Files. Default = True")
-
+    
+    parser.add_argument("-a", "--area", type=int, choices=([*range(11)]), default=0,  
+                        help = "Areas. Default = 0\n" 
+                        "    0 = global\n"
+                        "    1 = asian monsoon\n"
+                        "    2 = anticyclone (AMA)\n"
+                        "    3 = pacific\n"
+                        "    4 = atlantic\n"
+                        "    5 = central america\n"
+                        "    6 = africa\n"
+                        "    7 = nino3\n"
+                        "    8 = nino4\n"
+                        "    9 = nino34\n"
+                        )
     parser.add_argument("-y", "--year", type=int, choices=([0]+[*range(2007, 2020)]), default=0,  
                         help = "year. Default=2018")
     parser.add_argument("-m", "--month", type=int, choices=(np.arange(-6, 13)), default=0, 
@@ -264,48 +319,76 @@ if __name__ == '__main__':
     else:
         break_point = (31 + 1 + int(forced_age_bound/86400) * 24)
     
-    
-
 
     lt = args.lt
     ct = args.ct
-    area = 'global'
-    # area = 'asian monsoon'
+    if args.area == 1:
+        area = 'asia'
+    elif args.area == 2:
+        area = 'africa'
+    elif args.area == 3:
+        area = 'central america'
+    elif args.area == 4:
+        area = 'asian monsoon'
+    elif args.area == 5:
+        area = 'anticyclone (AMA)'
+    elif args.area == 6:
+        area = 'pacific'
+    elif args.area == 7:
+        area = 'atlantic'
+    elif args.area == 8:
+        area = 'nino3'
+    elif args.area == 9:
+        area = 'nino4'
+    elif args.area == 10:
+        area = 'nino34'
+    else:
+        area = 'global'
+    print(area.title())
     # years = [2008]#, 2008, 2009, 2010]
     # months = [2]
     if args.year == 0:
+        # years = [*range(2007,2020)]
         years = [*range(2007,2020)]
     else:
         years = [args.year]
     if args.month == 0:
-        months = [*range(1,13)]
         ses = 'year'
+        ses_tit = ses.title()
+        months = seasons[ses]
     elif args.month == -1:
-        months = [12, 1, 2]
         ses = 'djf'
+        ses_tit = ses
+        months = seasons[ses]
     elif args.month == -2:
-        months = [3, 4, 5]
         ses = 'mam'
+        ses_tit = ses
+        months = seasons[ses]
     elif args.month == -3:
-        months = [6, 7, 8]
         ses = 'jja'
+        ses_tit = ses
+        months = seasons[ses]
     elif args.month == -4:
-        months = [9, 10, 11]
         ses = 'son'
+        ses_tit = ses
+        months = seasons[ses]
     elif args.month == -5:
-        months = [3, 4, 5, 6, 7, 8]
-        ses = 'bsu'
+        ses = 'sum'
+        ses_tit = 'Summer'
+        months = seasons[ses]
     elif args.month == -6:
-        months = [9, 10, 11, 12, 1, 2]
-        ses = 'bwi'
+        ses = 'win'
+        ses_tit = 'Winter'
+        months = seasons[ses]
     else:
         months = [args.month]
         ses = 'm%02d' %args.month
     # months = seasons[ses]
+        
     ticT = time.time()
     y = -1
     for year in years:
-        for mon in months:#seasons[ses]:
+        for mon in months:
             #: Check for missing months
             if year in missing_months.keys():
                 if mon in missing_months[year]:
@@ -323,6 +406,7 @@ if __name__ == '__main__':
             if os.path.isfile(tempname) and lt:
                 qs06_mon, qs10_mon, qs12_mon, qs13_mon, qs14_mon, qs16_mon, \
                         height_mon, lats_mon, lons_mon, extras = readTempFile(tempname)
+            
             else:
                 #: Read part_000 file
                 f0 = os.path.join(partDir, 'part_000')
@@ -337,6 +421,7 @@ if __name__ == '__main__':
                 hits = (fls_mon & I_HIT) == I_HIT
                 olds = (fls_mon & I_OLD) == I_OLD
                 olds_hits = olds | hits
+                
                 #: What inds should we use?
                 all_inds = np.ones(hits.shape).astype(bool)
                 use_inds = hits
@@ -577,31 +662,64 @@ if __name__ == '__main__':
                         sys.exit()
                         # pdb.set_trace()
                         
-            if y == 0:
-                qs06 = qs06_mon
-                qs10 = qs10_mon
-                qs12 = qs12_mon
-                qs13 = qs13_mon
-                qs14 = qs14_mon
-                qs16 = qs16_mon
-                height = height_mon
-                lats = lats_mon
-                lons = lons_mon
-                ohClo_height = extras['ohClo_height']
-                # height_ohClo = height_ohClo
-                
-                
+            if area != 'global':
+                latmin = areas[area]['minLat']
+                latmax = areas[area]['maxLat']
+                lonmin = areas[area]['minLon']
+                lonmax = areas[area]['maxLon']
+                inds_lat_m = (lats_mon > latmin) & (lats_mon <= latmax)
+                inds_lon_m = (lons_mon > lonmin) & (lons_mon <= lonmax)
+                inds_ll_m = inds_lat_m & inds_lon_m
+                inds_lat_clo = (extras['ohClo_lats'] > latmin) & (extras['ohClo_lats']<= latmax)
+                inds_lon_clo = (extras['ohClo_lons'] > lonmin) & (extras['ohClo_lons'] <= lonmax)
+                inds_ll_clo = inds_lat_clo & inds_lon_clo
+                if 'minLonD' in areas[area].keys():
+                    lonminD = areas[area]['minLonD']
+                    lonmaxD = areas[area]['maxLonD']
+                    inds_lon_mD = (lons_mon > lonminD) & (lons_mon <= lonmaxD)
+                    inds_lon_cloD = (extras['ohClo_lons'] > lonminD) & (extras['ohClo_lons'] <= lonmaxD)
+                    
+                    inds_ll_m[(inds_lat_m & inds_lon_mD)] = True
+                    inds_ll_clo[(inds_lat_clo & inds_lon_cloD)] = True
             else:
-                qs06 = np.hstack((qs06, qs06_mon))
-                qs10 = np.hstack((qs10, qs10_mon))
-                qs12 = np.hstack((qs12, qs12_mon))
-                qs13 = np.hstack((qs13, qs13_mon))
-                qs14 = np.hstack((qs14, qs14_mon))
-                qs16 = np.hstack((qs16, qs16_mon))
-                height = np.hstack((height, height_mon))
-                lats = np.hstack((lats, lats_mon))
-                lons = np.hstack((lons, lons_mon))
-                ohClo_height = np.hstack((ohClo_height, extras['ohClo_height']))
+                inds_ll_m = np.ones(lats_mon.shape).astype(bool)
+                inds_ll_clo = np.ones(extras['ohClo_lons'].shape).astype(bool)
+            if y == 0:
+                qs06 = qs06_mon[:, inds_ll_m]
+                qs10 = qs10_mon[:, inds_ll_m]
+                qs12 = qs12_mon[:, inds_ll_m]
+                qs13 = qs13_mon[:, inds_ll_m]
+                qs14 = qs14_mon[:, inds_ll_m]
+                qs16 = qs16_mon[:, inds_ll_m]
+                height = height_mon[inds_ll_m]
+                lats = lats_mon[inds_ll_m]
+                lons = lons_mon[inds_ll_m]
+                age = extras['age'][inds_ll_m]
+                ohClo_height = extras['ohClo_height'][inds_ll_clo]
+                # height_ohClo = height_ohClo
+                conv_m = calcProcHeight(qs06_mon[:, inds_ll_m], qs10_mon[:, inds_ll_m], qs12_mon[:, inds_ll_m], qs13_mon[:, inds_ll_m], qs14_mon[:, inds_ll_m], qs16_mon[:, inds_ll_m], extras['ohClo_height'][inds_ll_clo], height_mon[inds_ll_m])
+                conv_m = conv_m.reshape(1, conv_m.shape[0], conv_m.shape[1])
+            else:
+                qs06 = np.hstack((qs06, qs06_mon[:, inds_ll_m]))
+                qs10 = np.hstack((qs10, qs10_mon[:, inds_ll_m]))
+                qs12 = np.hstack((qs12, qs12_mon[:, inds_ll_m]))
+                qs13 = np.hstack((qs13, qs13_mon[:, inds_ll_m]))
+                qs14 = np.hstack((qs14, qs14_mon[:, inds_ll_m]))
+                qs16 = np.hstack((qs16, qs16_mon[:, inds_ll_m]))
+                height = np.hstack((height, height_mon[inds_ll_m]))
+                lats = np.hstack((lats, lats_mon[inds_ll_m]))
+                lons = np.hstack((lons, lons_mon[inds_ll_m]))
+                age = np.hstack((age, extras['age'][inds_ll_m]))
+                ohClo_height = np.hstack((ohClo_height, extras['ohClo_height'][inds_ll_clo]))
+                conv_me = calcProcHeight(qs06_mon[:, inds_ll_m], qs10_mon[:, inds_ll_m], qs12_mon[:, inds_ll_m], qs13_mon[:, inds_ll_m], qs14_mon[:, inds_ll_m], qs16_mon[:, inds_ll_m], extras['ohClo_height'][inds_ll_clo], height_mon[inds_ll_m])
+                conv_me = conv_me.reshape(1, conv_me.shape[0], conv_me.shape[1])
+                conv_m = np.concatenate((conv_m, conv_me), axis=0)
+                # conv_m[0] = np.vstack((conv_m[0], conv_me[0]))
+                # conv_m[1] = np.vstack((conv_m[1], conv_me[1]))
+                # conv_m[2] = np.vstack((conv_m[2], conv_me[2]))
+                # conv_m[3] = np.vstack((conv_m[3], conv_me[3]))
+                # conv_m[4] = np.vstack((conv_m[4], conv_me[4]))
+                # conv_m[5] = np.vstack((conv_m[5], conv_me[5]))
                 
     print('Tot calc time = %d' %(time.time() - ticT))
     if lt == False:
@@ -609,54 +727,71 @@ if __name__ == '__main__':
     
     
     
-    
     #: Plot height
-    inds_org = (~np.isnan(qs16[0,:])).astype(bool)
-    all_heights = [*range(14000, 20121, 180)]
-    conv = np.zeros([6, len(all_heights)-1])
-    for h in range(len(all_heights)-1):
-        total_t = (((ohClo_height*1000) >= all_heights[h]) & ((ohClo_height*1000) < all_heights[h+1])).sum()
-        inds_h = ((height*1000) >= all_heights[h]) & ((height*1000) < all_heights[h+1])
-        inds = inds_org & inds_h
-        abowe_until_hit_06 = (qs06[0, inds]==2).sum()
-        abowe_until_hit_10 = (qs10[0, inds]==2).sum()
-        abowe_until_hit_12 = (qs12[0, inds]==2).sum()
-        abowe_until_hit_13 = (qs13[0, inds]==2).sum()
-        abowe_until_hit_14 = (qs14[0, inds]==2).sum()
-        abowe_until_hit_16 = (qs16[0, inds]==2).sum()
-        
-        abowe_no_hit = (qs13[0, inds]==1).sum()
-        below_before_hit = (qs13[0, inds]==-1).sum()
-        total = abowe_until_hit_13 + abowe_no_hit + below_before_hit
-        if total != inds.sum():
-            print('strange sum')
-            pdb.set_trace()
-        total = total_t
-        conv[0, h] = abowe_until_hit_06 / total
-        conv[1, h] = abowe_until_hit_10 / total
-        conv[2, h] = abowe_until_hit_12 / total
-        conv[3, h] = abowe_until_hit_13 / total
-        conv[4, h] = abowe_until_hit_14 / total
-        conv[5, h] = abowe_until_hit_16 / total
-        
+    
+    conv, all_heights = calcProcHeight(qs06, qs10, qs12, qs13, qs14, qs16, ohClo_height, height, rh=True)
+    conv_std = np.nanstd(conv_m, axis=0)
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    ax.plot(conv[0, :]*100, all_heights[0:-1], label='0.6')
-    ax.plot(conv[1, :]*100, all_heights[0:-1], label='1.0')
-    ax.plot(conv[2, :]*100, all_heights[0:-1], label='1.2')
-    ax.plot(conv[3, :]*100, all_heights[0:-1], label='1.3')
-    ax.plot(conv[4, :]*100, all_heights[0:-1], label='1.4')
-    ax.plot(conv[5, :]*100, all_heights[0:-1], label='1.6')
+    ax.plot(conv[0, :]*100, all_heights[0:-1], 'b', label='0.6')
+    
+    
+    ax.fill_betweenx(all_heights[0:-1], conv[0, :]*100, conv[0, :]*100 - conv_std[0, :] * 100, facecolor='b', alpha=0.3)
+    ax.fill_betweenx(all_heights[0:-1], conv[0, :]*100, conv[0, :]*100 + conv_std[0, :] * 100, facecolor='b', alpha=0.3)
+    
+    
+    ax.plot(conv[1, :]*100, all_heights[0:-1], 'm', label='1.0')
+    ax.fill_betweenx(all_heights[0:-1], conv[1, :]*100, conv[1, :]*100 - conv_std[1, :] * 100, facecolor='m', alpha=0.3)
+    ax.fill_betweenx(all_heights[0:-1], conv[1, :]*100, conv[1, :]*100 + conv_std[1, :] * 100, facecolor='m', alpha=0.3)
+    ax.plot(conv[2, :]*100, all_heights[0:-1], 'r', label='1.2')
+    ax.fill_betweenx(all_heights[0:-1], conv[2, :]*100, conv[2, :]*100 - conv_std[2, :] * 100, facecolor='r', alpha=0.3)
+    ax.fill_betweenx(all_heights[0:-1], conv[2, :]*100, conv[2, :]*100 + conv_std[2, :] * 100, facecolor='r', alpha=0.3)
+    ax.plot(conv[3, :]*100, all_heights[0:-1], 'c', label='1.3')
+    ax.fill_betweenx(all_heights[0:-1], conv[3, :]*100, conv[3, :]*100 - conv_std[3, :] * 100, facecolor='c', alpha=0.3)
+    ax.fill_betweenx(all_heights[0:-1], conv[3, :]*100, conv[3, :]*100 + conv_std[3, :] * 100, facecolor='c', alpha=0.3)
+    ax.plot(conv[4, :]*100, all_heights[0:-1], 'g', label='1.4')
+    ax.fill_betweenx(all_heights[0:-1], conv[4, :]*100, conv[4, :]*100 - conv_std[4, :] * 100, facecolor='g', alpha=0.3)
+    ax.fill_betweenx(all_heights[0:-1], conv[4, :]*100, conv[4, :]*100 + conv_std[4, :] * 100, facecolor='g', alpha=0.3)
+    ax.plot(conv[5, :]*100, all_heights[0:-1], 'y', label='1.6')
+    ax.fill_betweenx(all_heights[0:-1], conv[5, :]*100, conv[5, :]*100 - conv_std[5, :] * 100, facecolor='y', alpha=0.3)
+    ax.fill_betweenx(all_heights[0:-1], conv[5, :]*100, conv[5, :]*100 + conv_std[5, :] * 100, facecolor='y', alpha=0.3)
+    
+    ax.set_ylim(14000, 20000)
     
     ax.legend(fontsize='large')
     ax.set_xlabel('Convective [%]')
     ax.set_ylabel('Height [m]')
-    ax.set_title('Clouds with convective origion [%%], %s, %s' %(ses.title(), area.title()))
-    figname = '%s/qsn-div_height' %plotDir
+    
+    ax.set_title('Clouds with convective origion [%%], %s, %s' %(ses_tit, area.title()))
+    figname = '%s/conv-div_height' %plotDir
     figname = '%s_%s_%s' %(figname, ses, area.replace(' ', '_'))
-    fig.savefig('test.png')
+    fig.savefig(figname + '.png')
+    
+    
+    
+    
+    
+    
+    
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    # h = ax.hist(extras['age'] / (24*3600), bins=range(91), density=True)
+    h15 = np.histogram(age / (24*3600), bins=range(0,91,15), density=True)
+    rects15 = ax.bar((np.diff(h15[1]) / 2) + h15[1][0:-1], h15[0] * np.diff(h15[1]), width=(14.8), color='r', alpha=0.5)
+    h1 = np.histogram(age / (24*3600), bins=range(91), density=True)
+    rects1 = ax.bar((np.diff(h1[1]) / 2) + h1[1][0:-1], h1[0], color='b')
+    ax.set_xticks([0, 15, 30, 45, 60, 75, 90])
+    ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
+    #: Add counts above the bars
+    plt.tight_layout()
+    figname = '%s/parcel-dest_cld_div' %plotDir
+    print(figname)
+    fig.savefig('test' + '.png')
+    if 'oem-Latitude-5400' in socket.gethostname():
+        fig.show()
     
     pdb.set_trace()
+    
     
     heightBoundaries = [[None, None], [14,15], [15,16], [14,16], [16, 18], [18, 20], [18,19], [19,20]]
     
