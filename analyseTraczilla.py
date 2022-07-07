@@ -31,6 +31,7 @@ import flammkuchen as fk  # @UnresolvedImport
 # sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
 from io107 import readidx107
 from convsrcErikFullGridSatTropo import I_HIT, I_OLD, I_DEAD, I_CROSSED, I_DBORNE
+from analysePartFiles import esati_murphy, convIWC
 # I_DEAD = 0x200000 #: Dead
 # I_HIT = 0x400000 #: Hit a cloud
 # I_CROSSED = 0x2000000 #: outside domain
@@ -439,6 +440,68 @@ def getInitfiles(mD, years, se, dn, uD, lt=True):
     return retvP, retvC, retvM, outnames
 
 
+def readInitFiles(mD, y, m, dn, uD, lt=True, ct=True):
+    outname = 'CALIOP-EAD-%d%02d-%s' %(y, m, dn)
+    
+    if uD:
+        outname = outname + '-DD'
+    tempname = os.path.join(mD,'TempFiles', '%s-init' %(outname))
+    loadname = tempname + '.h5'
+    if (lt and os.path.isfile(loadname)):
+        lons0_mon, lats0_mon, p0_mon, t0_mon, sh_mon, vod_mon, height_mon, cm_mon, sc_mon, rvs0_mon, iwc0_mon = readTempFile(loadname)
+    else:
+        # outnamesTL.append(outname)
+        trajDir = os.path.join(mD,outname) 
+        initDir = os.path.join(trajDir, 'Initfiles')
+        
+        paramname = 'selDardar_Params-%s.pkl' %'-'.join(outname.split('-')[2:4])
+        catalogname = paramname.replace('_Params-', '_Calalog-')
+        # paramFile = os.path.join(initDir, paramname)
+        catalFile = os.path.join(initDir, catalogname)
+        pf = readidx107(os.path.join(trajDir,'part_000'),quiet=False)
+        cf = getCatalogFile(catalFile, pf, checkForNewFile=False)
+        # mf = readParamFile(paramFile)
+        pf['x'] = np.where(pf['x'] > 180, pf['x'] - 360, pf['x'])
+        pf['x'] = np.where(pf['x'] < -180, pf['x'] + 360, pf['x'])
+        lons0_mon = pf['x']
+        lats0_mon = pf['y']
+        p0_mon = pf['p']
+        t0_mon = pf['t']
+        sh_mon = cf['sh']
+        vod_mon = cf['vod']
+        height_mon = cf['height']
+        cm_mon = cf['CM']
+        sc_mon = cf['SC']
+        rvs0_mon = esati_murphy(p0_mon, t0_mon)
+        iwc0_mon = convIWC(cf['iwc'], p0_mon, t0_mon, sh_mon)
+        # cloudy = ((catalog['SC']>0) & (catalog['SC']<5))
+        if ct:
+            print('Create Temp File')
+            try:
+                h5file = h5py.File(tempname, 'w')
+                h5file.create_dataset('lons', data = lons0_mon)
+                h5file.create_dataset('lats', data = lats0_mon)
+                h5file.create_dataset('p0', data = p0_mon)
+                h5file.create_dataset('t0', data = t0_mon)
+                
+                h5file.create_dataset('sh', data = sh_mon)
+                h5file.create_dataset('vod', data = vod_mon)
+                h5file.create_dataset('height', data = height_mon)
+                h5file.create_dataset('cm', data = cm_mon)
+                h5file.create_dataset('sc', data = sc_mon)
+                
+                h5file.create_dataset('rvs0', data = rvs0_mon)
+                h5file.create_dataset('iwc0', data = iwc0_mon)
+                
+                h5file.close()
+            except:
+                print('Something wrong in H5')
+                sys.exit()
+        
+    return outname, lons0_mon, lats0_mon, p0_mon, t0_mon, sh_mon, vod_mon, height_mon, cm_mon, sc_mon, rvs0_mon, iwc0_mon
+
+
+
 def getConvfiles(oD, inames, lt=True):
     for ln in range(len(inames[0])):
         tempname = inames[0][ln]
@@ -563,6 +626,36 @@ def conv2DHistToImage(h, x, y, yb=60):
         pdb.set_trace()
     return him
 
+def readTempFile(fn):
+    h5f = h5py.File(fn, 'r')   
+    lons = h5f['lons'][:]
+    lats = h5f['lats'][:]
+    p0 = h5f['p0'][:]
+    t0 = h5f['t0'][:]
+    
+    sh = h5f['sh'][:]
+    vod = h5f['vod'][:]
+    height = h5f['height'][:]
+    cm = h5f['cm'][:]
+    sc = h5f['sc'][:]
+    
+    rvs0 = h5f['rvs0'][:]
+    iwc0 = h5f['iwc0'][:]
+    
+    h5f.close()
+    
+    
+    # extras = {'use_inds': h5f['use_inds'][:], 'ohClo_use_inds': h5f['ohClo_use_inds'][:], 'ohClr_use_inds': h5f['ohClr_use_inds'][:], \
+    #           'ohClo_height': h5f['ohClo_height'][:], 'ohClr_height': h5f['ohClr_height'][:], \
+    #           'ohClo_lats': h5f['ohClo_lats'][:], 'ohClo_lons': h5f['ohClo_lons'][:], \
+    #           'iwc0': h5f['iwc0'][:], 'age': h5f['age'][:], \
+    #           'part0_p': h5f['part0_p'][:], 'part0_t': h5f['part0_t'][:], \
+    #           'pressure': h5f['pressure'][:], 'temperature': h5f['temperature'][:]}
+
+    return lons, lats, p0, t0, sh, vod, height, cm, sc, rvs0, iwc0
+
+
+
 
 if __name__ == '__main__':
     
@@ -578,18 +671,19 @@ if __name__ == '__main__':
     
     
     compare = False
-    year = [2007, 2008, 2009, 2010]#, 2008, 2009, 2010]
+    years = [2007, 2008, 2009, 2010]#, 2008, 2009, 2010]
     # month = [2]#[1, 2, 3, 4]
     #'year', 'dkf', 'mam', 'jja', 'son'
     ses = 'year'#'mam'#'year'
     area = 'global'
     if ses == 'year':
-        year = [2008]
-    
-    
+        years = [2008]
+    years = [2008]
+    months = [3,4,5]
+    ses = 'mam'
     dn = 'n'
     useDardar = True
-    lt = True
+    lt = False
     # outDir = '/data/ejohansson/flexout/STC/Calipso-OUT/Coldpoint'
     #: filename of outfiles
     # outnames = 'CALIOP-'+advect+'-'+date_end.strftime('%b%Y')+diffus+'-%s' %args.night 
@@ -597,8 +691,26 @@ if __name__ == '__main__':
     #     outnames = outnames + '-DD'
     print('Read Init-files')
     tic = time.time()
-    part0, catalog, params, outnames = getInitfiles(mainDir, year, ses, dn, useDardar, lt=lt)
+    # part0, catalog, params, outnames = getInitfiles(mainDir, years, ses, dn, useDardar, lt=lt)
     print('It took %d sec to read Init-files' %(time.time() - tic))
+    # months = seasons[ses]
+    y = -1
+    for year in years:
+        for mon in months:
+            #: Check for missing months
+            if year in missing_months.keys():
+                if mon in missing_months[year]:
+                    continue
+            print('Year = %d, Month = %02d' %(year, mon))      
+            y  = y + 1
+    
+            
+            
+            
+            # retvPL, retvCL, retvML, outname = readInitFiles(mainDir, year, mon, dn, useDardar, lt=lt)
+            outname, lons0_mon, lats0_mon, p0_mon, t0_mon, sh_mon, vod_mon, height_mon, cm_mon, sc_mon, rvs0_mon, iwc0_mon = readInitFiles(mainDir, year, mon, dn, useDardar, lt=lt)
+            
+    pdb.set_trace()
     #: Read the index file that contains the initial positions
     # print('numpart',part0['numpart'])
     #:
