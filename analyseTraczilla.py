@@ -310,137 +310,137 @@ def getCatalogFile(fn, p0=None, checkForNewFile=True):
     return retv
 
 
-def getInitfiles(mD, years, se, dn, uD, lt=True):
-    if (not isinstance(years, list)):# or (not isinstance(months, list)):
-        print('Wrong type')
-        pdb.set_trace()
-    j = -1
-    if isinstance(se, int):
-        months = [se]
-    else:
-        months = seasons[se]
-    
-    for y in years:
-        j = j + 1
-        #: Decide the name for tempfile
-        if not isinstance(se, int): #(len(months) == 12):
-            tempname = os.path.join(mD,'TempFiles', 'CALIOP-EAD-%d-%s' %(y, dn))
-            if uD:
-                tempname = tempname + '-DD'
-            # if not ((se=='year') and (year == 2009)):
-            tempname = tempname + '-%s' %se
-            tempname = tempname + '-init'
-            loadname = tempname + '-param.h5'
-            # loadname = tempname + '.npy'
-        else:
-            loadname = ''
-            tempname = ''
-        #: If tempfile exist and lt = True, load the tempfile
-        if (lt and os.path.isfile(loadname)):
-            # retvPL, retvCL, retvML, outnamesTL = np.load(loadname, allow_pickle=True)
-            retvPL = fk.load(tempname + '-part.h5')
-            retvCL = fk.load(tempname + '-catalog.h5')
-            retvML = fk.load(tempname + '-param.h5')
-            outnamesTL = retvPL.pop('on')
-            
-                
-        #: if tempfile do not exist or lt = False. Do calculations
-        else:
-            i = -1
-            outnamesTL = []
-            for m in months:
-                if y in missing_months.keys():
-                    if m in missing_months[y]:
-                        continue
-                i = i + 1
-                #: Directories of the backward trajectories and name of the output file 77193056,
-                outname = 'CALIOP-EAD-%d%02d-%s' %(y, m, dn)
-                if uD:
-                    outname = outname + '-DD'
-                outnamesTL.append(outname)
-                trajDir = os.path.join(mD,outname) 
-                initDir = os.path.join(trajDir, 'Initfiles')
-                
-                paramname = 'selDardar_Params-%s.pkl' %'-'.join(outname.split('-')[2:4])
-                catalogname = paramname.replace('_Params-', '_Calalog-')
-                paramFile = os.path.join(initDir, paramname)
-                catalFile = os.path.join(initDir, catalogname)
-                pf = readidx107(os.path.join(trajDir,'part_000'),quiet=False)
-                cf = getCatalogFile(catalFile, pf, checkForNewFile=False)
-                mf = readParamFile(paramFile)
-                pf['x'] = np.where(pf['x'] > 180, pf['x'] - 360, pf['x'])
-                if i == 0:
-                    retvPL = pf.copy()
-                    retvCL = cf.copy()
-                    retvML = mf.copy()
-                else:
-                    for arname in retvPL.keys():
-                        if isinstance(retvPL[arname], int):
-                            retvPL[arname] = [retvPL[arname]]
-                        if isinstance(pf[arname], int):
-                            pf[arname] = [pf[arname]]
-                        retvPL[arname] = np.concatenate((np.asarray(retvPL[arname]), np.asarray(pf[arname])))
-                    
-                    for arname in retvCL.keys():
-                        if isinstance(retvCL[arname], int):
-                            retvCL[arname] = [retvCL[arname]]
-                        if isinstance(cf[arname], int):
-                            cf[arname] = [cf[arname]]
-                        retvCL[arname] = np.concatenate((np.asarray(retvCL[arname]), np.asarray(cf[arname])))
-                    
-                    for arname in retvML.keys():
-                        if isinstance(retvML[arname], (int, np.int64, str, datetime.datetime)):
-                            retvML[arname] = [retvML[arname]]
-                        if isinstance(mf[arname], (int, np.int64, str, datetime.datetime)):
-                            mf[arname] = [mf[arname]]
-                        retvML[arname] = np.concatenate((np.asarray(retvML[arname]), np.asarray(mf[arname])))
-            #: If there are no tempfile, create one
-            if (loadname != '') and (not os.path.isfile(loadname)):
-                retvPL.update({'on': outnamesTL})
-                fk.save(tempname + '-part.h5', retvPL)
-                fk.save(tempname + '-catalog.h5', retvCL)
-                fk.save(tempname + '-param.h5', retvML)
-                dummy = retvPL.pop('on')
-                dummy = None
-                # np.save(tempname, [retvPL, retvCL, retvML, outnamesTL])
+# def getInitfiles(mD, years, se, dn, uD, lt=True):
+#     if (not isinstance(years, list)):# or (not isinstance(months, list)):
+#         print('Wrong type')
+#         pdb.set_trace()
+#     j = -1
+#     if isinstance(se, int):
+#         months = [se]
+#     else:
+#         months = seasons[se]
+#
+#     for y in years:
+#         j = j + 1
+#         #: Decide the name for tempfile
+#         if not isinstance(se, int): #(len(months) == 12):
+#             tempname = os.path.join(mD,'TempFiles', 'CALIOP-EAD-%d-%s' %(y, dn))
+#             if uD:
+#                 tempname = tempname + '-DD'
+#             # if not ((se=='year') and (year == 2009)):
+#             tempname = tempname + '-%s' %se
+#             tempname = tempname + '-init'
+#             loadname = tempname + '-param.h5'
+#             # loadname = tempname + '.npy'
+#         else:
+#             loadname = ''
+#             tempname = ''
+#         #: If tempfile exist and lt = True, load the tempfile
+#         if (lt and os.path.isfile(loadname)):
+#             # retvPL, retvCL, retvML, outnamesTL = np.load(loadname, allow_pickle=True)
+#             retvPL = fk.load(tempname + '-part.h5')
+#             retvCL = fk.load(tempname + '-catalog.h5')
+#             retvML = fk.load(tempname + '-param.h5')
+#             outnamesTL = retvPL.pop('on')
+#
+#
+#         #: if tempfile do not exist or lt = False. Do calculations
+#         else:
+#             i = -1
+#             outnamesTL = []
+#             for m in months:
+#                 if y in missing_months.keys():
+#                     if m in missing_months[y]:
+#                         continue
+#                 i = i + 1
+#                 #: Directories of the backward trajectories and name of the output file 77193056,
+#                 outname = 'CALIOP-EAD-%d%02d-%s' %(y, m, dn)
+#                 if uD:
+#                     outname = outname + '-DD'
+#                 outnamesTL.append(outname)
+#                 trajDir = os.path.join(mD,outname) 
+#                 initDir = os.path.join(trajDir, 'Initfiles')
+#
+#                 paramname = 'selDardar_Params-%s.pkl' %'-'.join(outname.split('-')[2:4])
+#                 catalogname = paramname.replace('_Params-', '_Calalog-')
+#                 paramFile = os.path.join(initDir, paramname)
+#                 catalFile = os.path.join(initDir, catalogname)
+#                 pf = readidx107(os.path.join(trajDir,'part_000'),quiet=False)
+#                 cf = getCatalogFile(catalFile, pf, checkForNewFile=False)
+#                 mf = readParamFile(paramFile)
+#                 pf['x'] = np.where(pf['x'] > 180, pf['x'] - 360, pf['x'])
+#                 if i == 0:
+#                     retvPL = pf.copy()
+#                     retvCL = cf.copy()
+#                     retvML = mf.copy()
+#                 else:
+#                     for arname in retvPL.keys():
+#                         if isinstance(retvPL[arname], int):
+#                             retvPL[arname] = [retvPL[arname]]
+#                         if isinstance(pf[arname], int):
+#                             pf[arname] = [pf[arname]]
+#                         retvPL[arname] = np.concatenate((np.asarray(retvPL[arname]), np.asarray(pf[arname])))
+#
+#                     for arname in retvCL.keys():
+#                         if isinstance(retvCL[arname], int):
+#                             retvCL[arname] = [retvCL[arname]]
+#                         if isinstance(cf[arname], int):
+#                             cf[arname] = [cf[arname]]
+#                         retvCL[arname] = np.concatenate((np.asarray(retvCL[arname]), np.asarray(cf[arname])))
+#
+#                     for arname in retvML.keys():
+#                         if isinstance(retvML[arname], (int, np.int64, str, datetime.datetime)):
+#                             retvML[arname] = [retvML[arname]]
+#                         if isinstance(mf[arname], (int, np.int64, str, datetime.datetime)):
+#                             mf[arname] = [mf[arname]]
+#                         retvML[arname] = np.concatenate((np.asarray(retvML[arname]), np.asarray(mf[arname])))
+#             #: If there are no tempfile, create one
+#             if (loadname != '') and (not os.path.isfile(loadname)):
+#                 retvPL.update({'on': outnamesTL})
+#                 fk.save(tempname + '-part.h5', retvPL)
+#                 fk.save(tempname + '-catalog.h5', retvCL)
+#                 fk.save(tempname + '-param.h5', retvML)
+#                 dummy = retvPL.pop('on')
+#                 dummy = None
+#                 # np.save(tempname, [retvPL, retvCL, retvML, outnamesTL])
+#
+#
+#         if j == 0:
+#             retvP = retvPL.copy()
+#             retvC = retvCL.copy()
+#             retvM = retvML.copy()
+#             outnames = [[tempname], [outnamesTL]]
+#         else:
+#             for arname in retvP.keys():
+#                 if isinstance(retvP[arname], int) or isinstance(retvP[arname], np.int64):
+#                     retvP[arname] = [retvP[arname]]
+#                 if isinstance(retvPL[arname], int) or isinstance(retvPL[arname], np.int64):
+#                     retvPL[arname] = [retvPL[arname]]
+#                 try:
+#                     retvP[arname] = np.concatenate((np.asarray(retvP[arname]), np.asarray(retvPL[arname])))
+#                 except:
+#                     pdb.set_trace()
+#             for arname in retvC.keys():
+#                 if isinstance(retvC[arname], int):
+#                     retvC[arname] = [retvC[arname]]
+#                 if isinstance(retvCL[arname], int):
+#                     retvCL[arname] = [retvCL[arname]]
+#                 retvC[arname] = np.concatenate((np.asarray(retvC[arname]), np.asarray(retvCL[arname])))
+#
+#             for arname in retvM.keys():
+#                 if isinstance(retvM[arname], (int, np.int64, str, datetime.datetime)):
+#                     retvM[arname] = [retvM[arname]]
+#                 if isinstance(retvML[arname], (int, np.int64, str, datetime.datetime)):
+#                     retvML[arname] = [retvML[arname]]
+#                 retvM[arname] = np.concatenate((np.asarray(retvM[arname]), np.asarray(retvML[arname])))
+#
+#             outnames[0].append(tempname)
+#             outnames[1].append(outnamesTL)
+#
+#     return retvP, retvC, retvM, outnames
 
-        
-        if j == 0:
-            retvP = retvPL.copy()
-            retvC = retvCL.copy()
-            retvM = retvML.copy()
-            outnames = [[tempname], [outnamesTL]]
-        else:
-            for arname in retvP.keys():
-                if isinstance(retvP[arname], int) or isinstance(retvP[arname], np.int64):
-                    retvP[arname] = [retvP[arname]]
-                if isinstance(retvPL[arname], int) or isinstance(retvPL[arname], np.int64):
-                    retvPL[arname] = [retvPL[arname]]
-                try:
-                    retvP[arname] = np.concatenate((np.asarray(retvP[arname]), np.asarray(retvPL[arname])))
-                except:
-                    pdb.set_trace()
-            for arname in retvC.keys():
-                if isinstance(retvC[arname], int):
-                    retvC[arname] = [retvC[arname]]
-                if isinstance(retvCL[arname], int):
-                    retvCL[arname] = [retvCL[arname]]
-                retvC[arname] = np.concatenate((np.asarray(retvC[arname]), np.asarray(retvCL[arname])))
-            
-            for arname in retvM.keys():
-                if isinstance(retvM[arname], (int, np.int64, str, datetime.datetime)):
-                    retvM[arname] = [retvM[arname]]
-                if isinstance(retvML[arname], (int, np.int64, str, datetime.datetime)):
-                    retvML[arname] = [retvML[arname]]
-                retvM[arname] = np.concatenate((np.asarray(retvM[arname]), np.asarray(retvML[arname])))
-            
-            outnames[0].append(tempname)
-            outnames[1].append(outnamesTL)
-            
-    return retvP, retvC, retvM, outnames
 
-
-def readInitFiles(mD, y, m, dn, uD, lt=True, ct=True):
+def getInitFiles(mD, y, m, dn, uD, lt=True, ct=True):
     outname = 'CALIOP-EAD-%d%02d-%s' %(y, m, dn)
     
     if uD:
@@ -703,12 +703,12 @@ if __name__ == '__main__':
                     continue
             print('Year = %d, Month = %02d' %(year, mon))      
             y  = y + 1
+            outname, lons0_mon, lats0_mon, p0_mon, t0_mon, sh_mon, vod_mon, height_mon, cm_mon, sc_mon, rvs0_mon, iwc0_mon = getInitFiles(mainDir, year, mon, dn, useDardar, lt=lt)
     
             
+            rvs, fls, age, lons, lats, temp, pres = getConvfiles(outDir, outname, lt=lt)
             
             
-            # retvPL, retvCL, retvML, outname = readInitFiles(mainDir, year, mon, dn, useDardar, lt=lt)
-            outname, lons0_mon, lats0_mon, p0_mon, t0_mon, sh_mon, vod_mon, height_mon, cm_mon, sc_mon, rvs0_mon, iwc0_mon = readInitFiles(mainDir, year, mon, dn, useDardar, lt=lt)
             
     pdb.set_trace()
     #: Read the index file that contains the initial positions
@@ -720,7 +720,6 @@ if __name__ == '__main__':
     
     print('Read Conv-files')
     tic = time.time()
-    rvs, fls, age, lons, lats, temp, pres = getConvfiles(outDir, outnames, lt=lt)
     print('It took %d sec to read Conv-files' %(time.time() - tic))
     olds = (fls & I_OLD) == I_OLD
     hits = (fls & I_HIT) == I_HIT
