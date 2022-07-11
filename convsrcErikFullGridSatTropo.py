@@ -403,6 +403,8 @@ if __name__ == '__main__':
         super = '-super'+str(vshift)
     # Update the out_dir with the cloud type and the super paramater
     #out_dir = os.path.join(out_dir,'SVC-OUT-GridSat'+super)
+    if vshift == 0:
+        out_dir = out_dir + '/Vshift_0'
     if not os.path.isdir(out_dir):
         os.makedirs(out_dir)
     if not os.path.isdir(out_dir + '/out'):
@@ -410,7 +412,7 @@ if __name__ == '__main__':
     else:    
         print('out_dir directory already created')
     print('Out_dir = %s\n' %out_dir)
-    
+
     # Dates beginning and end
     #date_beg = datetime(year=year, month=month, day=day1, hour=0)
     date_end = datetime(year=year, month=month, day=1, hour=0)
