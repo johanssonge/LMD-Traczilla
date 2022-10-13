@@ -12,15 +12,17 @@ Copyright (c) 2022 Erik Johansson
 @contact: <erik.johansson@lmd.ipsl.fr>
 
 """
-
 import numpy as np
 import socket
 import os
-from matplotlib import pyplot as plt  # @UnresolvedImport
-from analyseTraczilla import getConvfiles, missing_months, readCatalogFile,\
-    getCatalogFile
-from convsrcErikFullGridSatTropo import I_HIT, I_OLD, I_DEAD, I_CROSSED, I_DBORNE
 import pdb
+from matplotlib import pyplot as plt  # @UnresolvedImport
+from matplotlib import colors as mcolors  # @UnresolvedImport
+import cartopy.crs as ccrs  # @UnresolvedImport
+from analyseTraczilla import getConvfiles, missing_months, readCatalogFile,\
+    getCatalogFile, areas
+from convsrcErikFullGridSatTropo import I_HIT, I_OLD, I_DEAD, I_CROSSED, I_DBORNE
+import sys
 
 
 
@@ -47,7 +49,7 @@ def plotFlexpVar(outDir, plotDir, mainDir, dc=False):
             print('Year = %d, Month = %02d' %(year, mon))
             
             outname = 'CALIOP-EAD-%d%02d-n-DD' %(year, mon)
-            rvs_mon, fls_mon, age_mon, lons_monF, lats_monF, temp_monF, pres_monF = getConvfiles(outDir, [[''], [[outname]]])  # @UnusedVariable
+            rvs_mon, fls_mon, age_mon, lons_monF, lats_monF, temp_monF, pres_monF = getConvfiles(outDir, ['', outname])  # @UnusedVariable
             
             tot_TOT = tot_TOT + fls_mon.shape[0]
             tot_HIT = tot_HIT + ((fls_mon & I_HIT) == I_HIT).sum()
@@ -73,13 +75,15 @@ def plotFlexpVar(outDir, plotDir, mainDir, dc=False):
     #--- 1 ---
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    rects = ax.bar(range(1, 7), [tot_TOT, tot_HIT, tot_OLD, tot_CROSSED, tot_DBORNE, tot_DEAD])
+    # rects = ax.bar(range(1, 7), [tot_TOT, tot_HIT, tot_OLD, tot_CROSSED, tot_DBORNE, tot_DEAD])
+    rects = ax.bar(range(1, 6), [tot_TOT, tot_HIT, tot_OLD, tot_CROSSED, tot_DBORNE])
     #: Add counts above the bars
     for rect in rects:
         hs = rect.get_height()
         plt.text(rect.get_x() + rect.get_width() / 2.0, hs, '%d' %hs, ha='center', va='bottom')
-    ax.set_xticks(range(1, 7))
-    ax.set_xticklabels(['TOT', 'HIT', 'OLD', 'CROSSED', 'DBORNE', 'DEAD'], fontsize='large')
+    ax.set_xticks(range(1, 6))
+    # ax.set_xticklabels(['TOT', 'HIT', 'OLD', 'CROSSED', 'DBORNE', 'DEAD'], fontsize='large')
+    ax.set_xticklabels(['TOT', 'HIT', 'OLD', 'CROSSED', 'DBORNE'], fontsize='large')
     ax.set_title('All pixels')  
     plt.tight_layout()
     figname_1 = '%s/parcel-dest_all_tot' %plotDir
@@ -90,14 +94,15 @@ def plotFlexpVar(outDir, plotDir, mainDir, dc=False):
     #--- 2 ---
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    rects = ax.bar(range(1, 6), [tot_HIT / tot_TOT, tot_OLD / tot_TOT, tot_CROSSED / tot_TOT, tot_DBORNE / tot_TOT, tot_DEAD / tot_TOT])
+    # rects = ax.bar(range(1, 6), [tot_HIT / tot_TOT, tot_OLD / tot_TOT, tot_CROSSED / tot_TOT, tot_DBORNE / tot_TOT, tot_DEAD / tot_TOT])
+    rects = ax.bar(range(1, 5), [tot_HIT / tot_TOT, tot_OLD / tot_TOT, tot_CROSSED / tot_TOT, tot_DBORNE / tot_TOT])
     #: Add counts above the bars
     for rect in rects:
         hs = rect.get_height()
         plt.text(rect.get_x() + rect.get_width() / 2.0, hs, '%.4f' %hs, ha='center', va='bottom')
     ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
-    ax.set_xticks(range(1, 6))
-    ax.set_xticklabels(['HIT', 'OLD', 'CROSSED', 'DBORNE', 'DEAD'])
+    ax.set_xticks(range(1, 5))
+    ax.set_xticklabels(['HIT', 'OLD', 'CROSSED', 'DBORNE'])
     ax.set_title('All pixels')
     plt.tight_layout()
     figname_2 = '%s/parcel-dest_all_div' %plotDir
@@ -146,6 +151,124 @@ def plotFlexpVar(outDir, plotDir, mainDir, dc=False):
     pdb.set_trace()
     
     
+def plotAreas(pD):
+
+    # colours = {'asia': 'y', 'asian monsoon': 'b', 'anticyclone (AMA)': 'r', 'pacific': 'g', 'central america': 'k'}#, 'atlantic', 'africa', 'warm pool', 'nino3', 'nino4', 'nino34'}
+    fig = plt.figure(figsize=(8, 8))
+    ax = fig.add_subplot(111,projection=ccrs.PlateCarree())
+    ax.set_extent([-180, 180, -90, 90], crs=ccrs.PlateCarree())
+    ax.coastlines()
+    i = -1
+    for area, latlon in areas.items():
+        figa = plt.figure()
+        axa = figa.add_subplot(111,projection=ccrs.PlateCarree())
+        axa.set_extent([-180, 180, -90, 90], crs=ccrs.PlateCarree())
+        axa.coastlines()
+        if area in ['nino34']:
+            continue
+        # if area not in ['asia']:
+        #     continue
+        # [*mcolors.TABLEAU_COLORS.keys()][i]
+        if i < len([*mcolors.TABLEAU_COLORS.keys()]):
+            col = mcolors.TABLEAU_COLORS[[*mcolors.TABLEAU_COLORS.keys()][i]]
+        else:
+            col = mcolors.BASE_COLORS[[*mcolors.BASE_COLORS.keys()][i-10]]
+        # if area not in colours.keys():
+        #     continue
+        i = i + 1
+        if 'minLon1' in latlon.keys():
+            #: --- TOT Map ---
+            #: Left lower
+            ax.plot([latlon['minLon1'], latlon['maxLon1']], [latlon['minLat1'], latlon['minLat1']], transform=ccrs.PlateCarree(), color=col)
+            #: Left upper
+            ax.plot([latlon['minLon1'], latlon['maxLon1']], [latlon['maxLat1'], latlon['maxLat1']], transform=ccrs.PlateCarree(), color=col)
+            #: Right lower            
+            ax.plot([latlon['minLon2'], latlon['maxLon2']], [latlon['maxLat2'], latlon['maxLat2']], transform=ccrs.PlateCarree(), color=col)
+            #: Right upper
+            ax.plot([latlon['minLon2'], latlon['maxLon2']], [latlon['minLat2'], latlon['minLat2']], transform=ccrs.PlateCarree(), color=col)
+            
+            #: Left boundary
+            ax.plot([latlon['minLon1'], latlon['minLon1']], [latlon['minLat1'], latlon['maxLat1']], transform=ccrs.PlateCarree(), color=col)
+            #: Middle boundary
+            ax.plot([latlon['maxLon1'], latlon['maxLon1']], [latlon['maxLat1'], latlon['maxLat2']], transform=ccrs.PlateCarree(), color=col)
+            ax.plot([latlon['maxLon1'], latlon['maxLon1']], [latlon['minLat1'], latlon['minLat2']], transform=ccrs.PlateCarree(), color=col)
+            #: Right boundary
+            ax.plot([latlon['maxLon2'], latlon['maxLon2']], [latlon['minLat2'], latlon['maxLat2']], transform=ccrs.PlateCarree(), color=col, label=area)
+            #: --- Single Map ---
+            #: Left lower
+            axa.plot([latlon['minLon1'], latlon['maxLon1']], [latlon['minLat1'], latlon['minLat1']], transform=ccrs.PlateCarree(), color=col)
+            #: Left upper
+            axa.plot([latlon['minLon1'], latlon['maxLon1']], [latlon['maxLat1'], latlon['maxLat1']], transform=ccrs.PlateCarree(), color=col)
+            #: Right lower            
+            axa.plot([latlon['minLon2'], latlon['maxLon2']], [latlon['maxLat2'], latlon['maxLat2']], transform=ccrs.PlateCarree(), color=col)
+            #: Right upper
+            axa.plot([latlon['minLon2'], latlon['maxLon2']], [latlon['minLat2'], latlon['minLat2']], transform=ccrs.PlateCarree(), color=col)
+            
+            #: Left boundary
+            axa.plot([latlon['minLon1'], latlon['minLon1']], [latlon['minLat1'], latlon['maxLat1']], transform=ccrs.PlateCarree(), color=col)
+            #: Middle boundary
+            axa.plot([latlon['maxLon1'], latlon['maxLon1']], [latlon['maxLat1'], latlon['maxLat2']], transform=ccrs.PlateCarree(), color=col)
+            axa.plot([latlon['maxLon1'], latlon['maxLon1']], [latlon['minLat1'], latlon['minLat2']], transform=ccrs.PlateCarree(), color=col)
+            #: Right boundary
+            axa.plot([latlon['maxLon2'], latlon['maxLon2']], [latlon['minLat2'], latlon['maxLat2']], transform=ccrs.PlateCarree(), color=col, label=area)
+        else:
+            #: --- TOT Map ---
+            #: Lower
+            ax.plot([latlon['minLon'], latlon['maxLon']], [latlon['minLat'], latlon['minLat']], transform=ccrs.PlateCarree(), color=col)
+            #: Upper
+            ax.plot([latlon['minLon'], latlon['maxLon']], [latlon['maxLat'], latlon['maxLat']], transform=ccrs.PlateCarree(), color=col)
+            #: Left boundary
+            ax.plot([latlon['minLon'], latlon['minLon']], [latlon['minLat'], latlon['maxLat']], transform=ccrs.PlateCarree(), color=col)
+            #: Right boundary
+            ax.plot([latlon['maxLon'], latlon['maxLon']], [latlon['minLat'], latlon['maxLat']], transform=ccrs.PlateCarree(), color=col, label=area)
+            #: --- Single Map ---
+            axa.plot([latlon['minLon'], latlon['maxLon']], [latlon['minLat'], latlon['minLat']], transform=ccrs.PlateCarree(), color=col)
+            #: Upper
+            axa.plot([latlon['minLon'], latlon['maxLon']], [latlon['maxLat'], latlon['maxLat']], transform=ccrs.PlateCarree(), color=col)
+            #: Left boundary
+            axa.plot([latlon['minLon'], latlon['minLon']], [latlon['minLat'], latlon['maxLat']], transform=ccrs.PlateCarree(), color=col)
+            #: Right boundary
+            axa.plot([latlon['maxLon'], latlon['maxLon']], [latlon['minLat'], latlon['maxLat']], transform=ccrs.PlateCarree(), color=col, label=area)
+
+        # axa.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+        # axa.legend(loc='lower left', bbox_to_anchor=(0, 1.01))
+        # axa.legend(loc='lower right', bbox_to_anchor=(1, 1.01))
+        axa.legend(loc='upper left', bbox_to_anchor=(0, -0.02))
+        figa.tight_layout()
+        if 'oem-Latitude-5400' in socket.gethostname():
+            figa.show()
+        fignamea = '%s/area-map_%s' %(pD, area.replace(' ', '-').replace('(', '').replace(')', ''))
+        figa.savefig(fignamea + '.png')
+    # ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    ax.legend(loc='upper left', bbox_to_anchor=(0, -0.02), fancybox=True, ncol=2)
+    fig.tight_layout()
+    if 'oem-Latitude-5400' in socket.gethostname():
+        fig.show()
+    figname = '%s/area-map' %(pD)
+    print(figname)
+    fig.savefig(figname + '.png')
+    
+def plotGridsat(pd):
+    from convsrcErikFullGridSatTropo import read_sat, read_ERA5
+    import datetime
+    sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
+    from ECMWF_N import ECMWF  # @UnresolvedImport
+    import geosat  # @UnresolvedImport
+    date_end = datetime.datetime(year=2008, month=1, day=1, hour=0)
+    current_time = date_end
+    dstep = datetime.timedelta(hours=0)
+    dtRange = datetime.timedelta(hours=0)
+    dat0 = geosat.GridSat(current_time)
+    dat0._get_IR0()
+    dat0.var['IR0'][dat0.var['IR0']<0] = 9999
+    pdb.set_trace()
+    
+    dat0.close()
+    # remove dat and make it a view of dat0, try to avoid errors on first attempt
+    print('read GridSat for ',current_time)
+    get_sat = read_sat(current_time,dtRange,pre=True,vshift=0)
+    get_ERA5 = read_ERA5(current_time,dtRange,pre=True)
+    pdb.set_trace()
 if __name__ == '__main__':
     if 'ciclad' in socket.gethostname():
         datPath = os.environ['HOME'].replace('/home/', '/data/')
@@ -164,9 +287,13 @@ if __name__ == '__main__':
         os.makedirs(plotDir)
     
     
+
     
-    
+    plotAreas(plotDir)
+    pdb.set_trace()
     plotFlexpVar(outDir, plotDir, mainDir, dc=False)
+    pdb.set_trace()
+    plotGridsat(plotDir)
     
     
     

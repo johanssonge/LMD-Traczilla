@@ -348,7 +348,8 @@ if __name__ == '__main__':
         traj_dir = '/data/ejohansson/flexout/STC/Calipso'
         out_dir = '/homedata/legras/STC/Calipso-OUT'
     elif 'oem-Latitude-5400' in socket.gethostname():
-        sys.exit()
+        traj_dir=''
+        out_dir=''
     else:
         print ('CANNOT RECOGNIZE HOST - DO NOT RUN ON NON DEFINED HOSTS')
         exit()

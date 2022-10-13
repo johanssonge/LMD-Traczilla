@@ -45,16 +45,25 @@ I_STOP = I_HIT + I_DEAD
 #          'central america': {'minLat': -30, 'maxLat': 30, 'minLon': -115, 'maxLon': -40}, \
 #          'atlantic': {'minLat': -30, 'maxLat': 30, 'minLon': 150, 'maxLon': 180}, \
 #          'africa': {'minLat': -30, 'maxLat': 20, 'minLon': 150, 'maxLon': 180}}
-areas = {'asia': {'minLat': -30, 'maxLat': 20, 'minLon': 80, 'maxLon': 150}, \
-         'asian monsoon': {'minLat': -20, 'maxLat': 40, 'minLon': 65, 'maxLon': 95}, \
-         'anticyclone (AMA)': {'minLat': 20, 'maxLat': 30, 'minLon': -50, 'maxLon': 150}, \
-         'pacific': {'minLat': -30, 'maxLat': 30, 'minLon': -180, 'maxLon': -115}, \
-         'central america': {'minLat': -30, 'maxLat': 30, 'minLon': -115, 'maxLon': -40}, \
-         'atlantic': {'minLat': -30, 'maxLat': 30, 'minLon': 150, 'maxLon': 180}, \
-         'africa': {'minLat': -30, 'maxLat': 20, 'minLon': 150, 'maxLon': 180}, \
-         'nino3':{'minLat': -5, 'maxLat': 5, 'minLon': -150, 'maxLon': -90}, \
-         'nino4':{'minLat': -5, 'maxLat': 5, 'minLon': 150, 'maxLon': 180, 'minLonD': -180, 'maxLonD': -150}, \
-         'nino34':{'minLat': -5, 'maxLat': 5, 'minLon': 150, 'maxLon': 180, 'minLonD': -180, 'maxLonD': -90}}
+areas = {'asia': {'num': 1,'minLat1': -30, 'maxLat1': 20, 'minLon1': 80, 'maxLon1': 150, \
+                           'minLat2': -30, 'maxLat2': 30, 'minLon2': 150, 'maxLon2': 180}, \
+         'asian monsoon anticyclone (AMA)': {'num': 2,'minLat': 20, 'maxLat': 30, 'minLon': 50, 'maxLon': 150}, \
+         'pacific': {'num': 3,'minLat': -30, 'maxLat': 30, 'minLon': -180, 'maxLon': -115}, \
+         'central america': {'num': 4,'minLat': -30, 'maxLat': 30, 'minLon': -115, 'maxLon': -40}, \
+         'africa': {'num': 5, 'minLat1': -30, 'maxLat1': 30, 'minLon1': -40, 'maxLon1': 50, \
+                              'minLat2': -30, 'maxLat2': 20, 'minLon2': 50, 'maxLon2': 80}, \
+         'asian monsoon': {'num': 6, 'minLat': -20, 'maxLat': 40, 'minLon': 65, 'maxLon': 95}, \
+         'pacific 2': {'num': 7, 'minLat': -30, 'maxLat': 30, 'minLon': -180, 'maxLon': -115}, \
+         'central america 2': {'num': 8, 'minLat': -30, 'maxLat': 30, 'minLon': -115, 'maxLon': -40}, \
+         'atlantic': {'num': 9, 'minLat': -30, 'maxLat': 30, 'minLon': -40, 'maxLon': 0}, \
+         'africa 2': {'num': 10, 'minLat': -30, 'maxLat': 30, 'minLon': 0, 'maxLon': 45}, \
+         'warm pool': {'num': 11, 'minLat': -30, 'maxLat': 30, 'minLon': 70, 'maxLon': 160}, \
+         'nino3':{'num': 12, 'minLat': -5, 'maxLat': 5, 'minLon': -150, 'maxLon': -90}, \
+         'nino4':{'num': 13, 'minLat1': -5, 'maxLat1': 5, 'minLon1': 150, 'maxLon1': 180, \
+                             'minLat2': -5, 'maxLat2': 5, 'minLon2': -180, 'maxLon2': -150}, \
+         'nino34':{'num': 14, 'minLat1': -5, 'maxLat1': 5, 'minLon1': 150, 'maxLon1': 180, \
+                              'minLat2': -5, 'maxLat2': 5, 'minLon2': -180, 'maxLon2': -90}}
+
         
 seasons = {'year': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 'djf': [12, 1, 2], 'mam': [3, 4, 5], \
            'jja': [6, 7, 8], 'son': [9, 10, 11], 'sum': [3, 4, 5, 6, 7, 8], 'win': [9, 10, 11, 12, 1, 2]}
@@ -63,7 +72,58 @@ missing_months = {2007: [1,2], 2011: [1, 5, 6, 7, 8, 9, 10, 11, 12], 2012: [1, 2
 magic = 0.84
 
 
+def getAreaInds(arn, lat, lon):
+    if arn.lower() in ['global']:
+        llInd = np.ones(lat.shape).astype(bool)
+    elif arn in areas.keys():
+        if 'minLat1' in areas[arn].keys():
+            latmin1 = areas[arn]['minLat1']
+            latmax1 = areas[arn]['maxLat1']
+            lonmin1 = areas[arn]['minLon1']
+            lonmax1 = areas[arn]['maxLon1']
+            latmin2 = areas[arn]['minLat2']
+            latmax2 = areas[arn]['maxLat2']
+            lonmin2 = areas[arn]['minLon2']
+            lonmax2 = areas[arn]['maxLon2']
+            indsLat1 = (lat > latmin1) & (lat <= latmax1)
+            indsLon1 = (lon > lonmin1) & (lon <= lonmax1)
+            llInd1 = indsLat1 & indsLon1
+            indsLat2 = (lat > latmin2) & (lat <= latmax2)
+            indsLon2 = (lon > lonmin2) & (lon <= lonmax2)
+            llInd2 = indsLat2 & indsLon2
+            llInd = llInd1 | llInd2
+        else:
+            latmin = areas[arn]['minLat']
+            latmax = areas[arn]['maxLat']
+            lonmin = areas[arn]['minLon']
+            lonmax = areas[arn]['maxLon']
+            indsLat = (lat > latmin) & (lat <= latmax)
+            indsLon = (lon > lonmin) & (lon <= lonmax)
+            llInd = indsLat & indsLon
+    else:
+        print('Wrong Area')
+        sys.exit()
+    return llInd
 
+
+def getAreaName(an):
+    ans = []
+    if an == 0:
+        area = 'global'
+    else:
+        for arrname, arrdata in areas.items():
+            ans.append(arrdata['num'])
+            if an == arrdata['num']:
+                area = arrname
+                break
+    try:
+        return area
+    except:
+        print('wrong area num')
+        print('Area num avail')
+        print(ans)
+        print('Area num used = %d' %an)
+        sys.exit()
 
 
 def convIWC(wc, p, T, qv):
@@ -554,7 +614,6 @@ def getConvfiles(oD, inames, lt=True, ct=True):
         i = -1
         i = i + 1
         fname = os.path.join(oD, outname + '.h5')
-        pdb.set_trace()
         rvs, fls, age, lons, lats, temp, pres = readConvFile(fname)
         if i == 0:
             retvRvs = rvs.copy()
@@ -730,20 +789,8 @@ if __name__ == '__main__':
                         help = "Create Temp Files, only valid if no temp file is loaded. Default = True")
     parser.add_argument("-l", "--lt", action='store_false', default = True, 
                         help = "Load Temp Files. Default = True")
-    
-    parser.add_argument("-a", "--area", type=int, choices=([*range(11)]), default=0,  
-                        help = "Areas. Default = 0\n" 
-                        "    0 = global\n"
-                        "    1 = asian monsoon\n"
-                        "    2 = anticyclone (AMA)\n"
-                        "    3 = pacific\n"
-                        "    4 = atlantic\n"
-                        "    5 = central america\n"
-                        "    6 = africa\n"
-                        "    7 = nino3\n"
-                        "    8 = nino4\n"
-                        "    9 = nino34\n"
-                        )
+    parser.add_argument("-a", "--area", type=int, choices=([*range(20)]), default=0,  
+                        help = "Areas. Default = 0\n")
     parser.add_argument("-t", "--temp", action='store_true', default = False, 
                         help = "Create Temp Files. Default = False")
     parser.add_argument("-y", "--year", type=int, choices=([0]+[*range(2007, 2020)]), default=0,  
@@ -767,7 +814,7 @@ if __name__ == '__main__':
     compare = False
     dn = 'n'
     useDardar = True
-    area = 'global'
+    area = getAreaName(args.area)
     
     lt = args.lt
     
@@ -863,16 +910,9 @@ if __name__ == '__main__':
                 clInd = np.ones(fls_mon.shape).astype(bool)
                 clType = 'all'
                 
-            if area != 'global':
-                latmin = areas[area]['minLat']
-                latmax = areas[area]['maxLat']
-                lonmin = areas[area]['minLon']
-                lonmax = areas[area]['maxLon']
-                indsLat = (lats0_mon > latmin) & (lats0_mon <= latmax)
-                indsLon = (lons0_mon > lonmin) & (lons0_mon <= lonmax)
-                llInd = indsLat & indsLon
-            else:
-                llInd = np.ones(fls_mon.shape).astype(bool)
+                
+            llInd = getAreaInds(area, lats0_mon, lons0_mon)
+                
             useInds = typeInd & clInd & llInd
             
             if y == 0:
@@ -932,40 +972,62 @@ if __name__ == '__main__':
     # 2D-Histograms, Height vs Age 
     print('Plot 2D Histograms - height')
     # for ctyp in ['all', 'cld', 'cld_thin', 'clr']:
-    
+    figname_end = '%s_%s_%s' %(ses, area.replace(' ', '_').replace('(', '').replace(')', ''),  useType.lower())
     if clType == 'all':
         title_org = '%s pixels' %useType.title()
-        figname_end = '%s_%s_%s_all' %(ses, area.replace(' ', '_'),  useType.lower())
+        figname_end = '%s_all' %(figname_end)
         vmax = 100000
     elif clType == 'cld':
         title_org = '%s and Cloudy pixels' %useType.title()
-        figname_end = '%s_%s_%s_cld' %(ses, area.replace(' ', '_'),  useType.lower())
-        vmax = 100000
+        figname_end = '%s_cld' %(figname_end)
+        vmax1 = 0.003
+        vmax2 = 10000
     elif clType == 'cld_thin':
         title_org = '%s and Thin Cloudy pixels' %useType.title()
-        figname_end = '%s_%s_%s_cld_thin' %(ses, area.replace(' ', '_'),  useType.lower())
+        figname_end = '%s_cld_thin' %(figname_end)
         vmax = 10000
     elif clType == 'clr':
         title_org = '%s and Clear pixels' %useType.title()
-        figname_end = '%s_%s_%s_clr' %(ses, area.replace(' ', '_'),  useType.lower())
+        figname_end = '%s_clr' %(figname_end)
         vmax = 50000
     figname_org = '%s/2dhist_height_%s' %(plotDir, figname_end)
     inds = np.ones(age.shape[0]).astype(bool)
     figname = figname_org
     title = title_org
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    hh = ax.hist2d(age[inds] / 86400, height0[inds], bins=[[*range(0,201)], [*range(14,21)]], vmin=0, vmax=vmax)#, bins=400)
+    fig = plt.figure(figsize=(6, 8))
+    ax = fig.add_subplot(2,1,1)
+    # hh = ax.hist2d(age[inds] / 86400, height0[inds]*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]], density=True)#, vmin=0, vmax=vmax)#, bins=400)
+    hh1, xedges, yedges = np.histogram2d(age[inds] / 86400, height0[inds]*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]], density=True)
+    hh1 = (hh1 * np.diff(yedges))         
+    aspect = float('%.2f' %((1.) / ((yedges[0] - yedges[-1]) / (xedges[0] - xedges[-1]))))
+    im = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]], vmin=0, vmax=vmax1)
+    # ax.set_xlabel('Age [days]', fontsize='x-large')
     ax.set_ylabel('Height [km]', fontsize='x-large')
+    ax.set_yticklabels((ax.get_yticks()/1000).astype(int))
+    # fig.subplots_adjust(right=0.89)
+    cbar = fig.colorbar(im, label='[1 / day]')#, cax=cbar_ax)
+    ax = fig.add_subplot(2,1,2)
+    # hh = ax.hist2d(age[inds] / 86400, height0[inds]*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]], density=True)#, vmin=0, vmax=vmax)#, bins=400)
+    hh2, xedges, yedges = np.histogram2d(age[inds] / 86400, height0[inds]*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]])
+    aspect = float('%.2f' %((1.) / ((yedges[0] - yedges[-1]) / (xedges[0] - xedges[-1]))))
+    # aspect = float('%.2f' %((1.) / ((yedges.shape[0]) / (xedges.shape[0]))))
+    im = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]], vmin=0, vmax=vmax2)
+    ax.plot((np.diff(xedges)/2) + xedges[0:-1], np.argmax(hh1, axis=1)*500+14000, 'r')
     ax.set_xlabel('Age [days]', fontsize='x-large')
-    # ax.set_title(title)
-    # plt.rcParams.update({'font.size': 22})
+    ax.set_ylabel('Height [km]', fontsize='x-large')
+    ax.set_yticklabels((ax.get_yticks()/1000).astype(int))
     fig.subplots_adjust(right=0.89)
+    cbar = fig.colorbar(im)#, label='[1 / day]')#, cax=cbar_ax)
+
+
+    
     # cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
-    cbar = fig.colorbar(hh[3])#, cax=cbar_ax)
+    # cbar = fig.colorbar(hh[-1])#, label='[1 / day]')#, cax=cbar_ax)
+    
     print(figname)
     fig.savefig(figname + '.png')
-    
+    pdb.set_trace()
+
     heightBoundaries = [[None, None], [14,16], [16, 18], [18, 20], [18,19], [19,20]]
     #: https://stackoverflow.com/questions/50611018/cartopy-heatmap-over-openstreetmap-background/50638691
     print('Plot Age Histograms')
@@ -1002,6 +1064,7 @@ if __name__ == '__main__':
                 horizontalalignment='center',
                 verticalalignment='center',
                 transform = ax.transAxes)
+        ax.set_ylabel('[1 / day]')
         ax = fig.add_subplot(2,1,2)
         h = ax.hist(age[inds] / 86400, bins=range(0,201), density=True)
         ax.set_yscale('log')
@@ -1112,7 +1175,7 @@ if __name__ == '__main__':
         ax = fig.add_subplot(2,1,1,projection=ccrs.PlateCarree())
         ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
         ax.coastlines()
-        im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges1[0], yedges1[-1]])
+        im1 = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [xedges1[0], xedges1[-1], yedges1[0], yedges1[-1]])
         ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
         ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
         ax.tick_params(axis=u'both', which=u'both',length=0)
@@ -1124,7 +1187,7 @@ if __name__ == '__main__':
         ax = fig.add_subplot(2,1,2,projection=ccrs.PlateCarree())
         ax.set_extent([-180, 180, -1*ymax, ymax], crs=ccrs.PlateCarree())
         ax.coastlines()
-        im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [-180, 180, yedges2[0], yedges2[-1]])
+        im2 = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [xedges2[0], xedges2[-1], yedges2[0], yedges2[-1]])
         ax.set_yticks([-1*ymax, -1*ymax//2, 0, ymax//2, ymax], crs=ccrs.PlateCarree())
         ax.set_yticklabels([r'$%d\degree S$' %ymax, r'$%d\degree S$' %(ymax//2), r'$0\degree$', r'$%d\degree N$' %(ymax//2), r'$%d\degree N$' %ymax])
         ax.tick_params(axis=u'both', which=u'both',length=0)
@@ -1135,8 +1198,6 @@ if __name__ == '__main__':
         print(figname)
         fig.savefig(figname + '.png')
         plt.close(fig)
-    pdb.set_trace()
-        
     
     
     
