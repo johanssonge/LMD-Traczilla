@@ -291,7 +291,7 @@ if __name__ == '__main__':
                         help = "Month. Default=6")
     
     args = parser.parse_args()
-    if 'ciclad' in socket.gethostname():
+    if ('ciclad' in socket.gethostname()) or ('spirit' in socket.gethostname()):
         datPath = os.environ['HOME'].replace('/home/', '/data/')
         ekjDir = '/proju/flexpart/flexpart_in/EKJ/ejohansson'
         mainDir = '%s/flexout/STC/Calipso' %ekjDir

@@ -336,7 +336,7 @@ if __name__ == '__main__':
     
     # to be updated
     # Define main directories
-    if 'ciclad' in socket.gethostname():
+    if ('ciclad' in socket.gethostname()) or ('spirit' in socket.gethostname()):
         #main_sat_dir = '/data/legras/flexpart_in/SAFNWC'
             #SVC_Dir = '/bdd/CFMIP/SEL2'
         datPath = os.environ['HOME'].replace('/home/', '/data/')
