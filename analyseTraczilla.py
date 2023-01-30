@@ -31,6 +31,7 @@ import flammkuchen as fk  # @UnresolvedImport
 # sys.path.append(os.environ['HOME'] + '/Projects/STC/pylib')
 from io107 import readidx107
 from convsrcErikFullGridSatTropo import I_HIT, I_OLD, I_DEAD, I_CROSSED, I_DBORNE
+import calendar
 # I_DEAD = 0x200000 #: Dead
 # I_HIT = 0x400000 #: Hit a cloud
 # I_CROSSED = 0x2000000 #: outside domain
@@ -339,7 +340,7 @@ def getCatalogFile(fn, p0=None, checkForNewFile=True):
     nameDic = {'CM': 'Cloud_Mask', 'TpH': 'Tropopause_Height', \
                 'SZA': 'SZA', 'SC': 'Simplified_Categorization', \
                 'lensel': 'lensel', 'npart': 'npart', 'vod': 'vis_optical_depth', \
-                'height': 'Track_Height', 'iwc': 'iwc', 'sh': 'Specific_humidity'}
+                'height': 'Track_Height', 'iwc': 'iwc', 'sh': 'Specific_humidity', 'utc': 'utc'}
     retv = {}
     for rn in nameDic.keys():
         retv.update({rn: np.array([])})
@@ -542,19 +543,164 @@ def getCatalogFile(fn, p0=None, checkForNewFile=True):
 #     return retvP, retvC, retvM, outnames
 
 
+
+def convertIrStartToUTC(partf, reshape_col = None):
+    #: if the time is repeted in steps it might be 
+    #: unessecary to calculate same time several times 
+    if reshape_col is None:
+        ir_start = partf['ir_start']
+    else:
+        ir_start = partf['ir_start'].reshape(-1, reshape_col)[:, 0]
+    utc = [datetime.datetime(int(str(partf['stamp_date'])[0:4]), int(str(partf['stamp_date'])[4:6]), \
+                             int(str(partf['stamp_date'])[6:8]), int(str(partf['stamp_date'])[8:10]), \
+                             int(str(partf['stamp_date'])[10:12]), int(str(partf['stamp_date'])[12:14])) + \
+                             datetime.timedelta(seconds=int(ist)) for ist in ir_start]
+    return utc
+def readRedmaskDatetime(dt):
+    fn = '/data/legras/SVC/%d/redmask-%d_%02d_%02d.pkl'%(dt.year, dt.year, dt.month, dt.day)
+    if not os.path.isfile(fn):
+        return {'Nofile': np.nan}
+    with gzip.open(fn ,'rb') as f:
+        redmask = pickle.load(f)
+    return redmask
+def nearest_ind(items, pivot):
+    time_diff = np.abs([date - pivot for date in items])
+    return time_diff.argmin(0)
+def addVarToTemp(fn, var_data, var_name):
+    h5file = h5py.File(fn, 'a')
+    if var_name in h5file.keys():
+        print('%s already exist in tempfile' %var_name)
+        pdb.set_trace()
+    else:
+        try:
+            h5file.create_dataset(var_name, data = var_data)
+        except:
+            print('H5 kan ej spara')
+            pdb.set_trace()
+    h5file.close()
+
+
+def findSVC(y, m, utc, pf, mon0_lon, mon0_lat):
+    svc_mask_hmask = np.zeros([len(utc), 100])
+    svc_mask_lat = np.zeros([len(utc)])
+    svc_mask_lon = np.zeros([len(utc)])
+    svc_mask_time = np.zeros([len(utc)]).astype(datetime.datetime)
+    svc_mask_time_diff = np.zeros([len(utc)])
+    used_utc = np.zeros([len(utc)])
+
+    #: Redmask is updated in days while data from flexpart is monthly
+    weekDay, nrofdays = calendar.monthrange(y, m)  # @UnusedVariable
+    for dom in range(1, nrofdays + 1)[::-1]:
+        print('%d of %d' %(dom, nrofdays))
+        redmask = {}
+        dt_dom = datetime.datetime(y, m, dom)
+        #: Add a day before and after to make sure we get the right match at day boundaries
+        redmask1 = readRedmaskDatetime(dt_dom - datetime.timedelta(1))
+        redmask2 = readRedmaskDatetime(dt_dom)
+        redmask3 = readRedmaskDatetime(dt_dom + datetime.timedelta(1))
+        for arrname in redmask2.keys():
+            #: redmask2, important mask must exist. 
+            #: It is the one for the specific day
+            if arrname == 'Nofile':
+                redmask = {'time': [np.nan], 'hmask': [np.nan], 'time': [np.nan], 'longitude': [np.nan], 'latitude': [np.nan]}
+                break
+            elif arrname == 'time':
+                #: Time in UTC                            
+                mask2 = [redmask2['day'] + datetime.timedelta(seconds=int(ist)) for ist in redmask2['time']]
+            else:
+                mask2 = redmask2[arrname]
+            #: This one is 1D and is therfore not important at the moment
+            #: Needs to be after mask2 otherwise redmask is not uppdated for Nofile
+            #: Do not mather if it is before mask1/3 but saves "some time" if it is before
+            if isinstance(redmask2[arrname], datetime.datetime):
+                continue
+            #: redmask1 and readmask 3 day before and after. 
+            #: Not as important, so continu without if not exist
+            if 'Nofile' in redmask1.keys():
+                #: 2D
+                if arrname in ['hmask']:
+                    mask1 = np.array([], dtype=np.int64).reshape(0,100)
+                else:
+                    mask1 = []
+            elif arrname == 'time':
+                #: Time in UTC
+                mask1 = [redmask1['day'] + datetime.timedelta(seconds=int(ist)) for ist in redmask1['time']]
+            else:
+                mask1 = redmask1[arrname]
+            if 'Nofile' in redmask3.keys():
+                #: 2D
+                if arrname in ['hmask']:
+                    mask3 = np.array([], dtype=np.int64).reshape(0,100)
+                else:
+                    mask3 = []
+            elif arrname == 'time':
+                #: Time in UTC
+                mask3 = [redmask3['day'] + datetime.timedelta(seconds=int(ist)) for ist in redmask3['time']]
+            else:
+                mask3 = redmask3[arrname]
+            redmask.update({arrname: np.concatenate((mask1, mask2, mask3))})
+        
+        day_ind = ((np.asarray(utc) >= datetime.datetime(y, m, dom, 0, 0, 0)) & \
+                   (np.asarray(utc) < (datetime.datetime(y, m, dom, 0, 0, 0) + datetime.timedelta(1))))
+        used_utc[day_ind] = used_utc[day_ind] + 1
+        if day_ind.sum() == 0:
+            continue
+        tic = time.time()
+        for di in np.where(day_ind)[0]:
+            utctid = utc[di]
+            if (len(redmask['time']) == 1) and np.isnan(redmask['time'][0]):
+                close_ind = 0
+                #: This one needs to be for each hight
+                #: 1D here but 2D under else:
+                svc_mask_hmask[di, : ] = np.repeat(redmask['hmask'][close_ind], 100)
+                #: can not take .total_seconds() on a nan value
+                svc_mask_time_diff[di] = redmask['time'][close_ind]
+            else:
+                close_ind = nearest_ind(redmask['time'], utctid)
+                svc_mask_hmask[di, :] = redmask['hmask'][close_ind, :]
+                svc_mask_time_diff[di] = (utctid - redmask['time'][close_ind]).total_seconds()
+            svc_mask_time[di] = redmask['time'][close_ind]
+            svc_mask_lon[di] = redmask['longitude'][close_ind]
+            svc_mask_lat[di] = redmask['latitude'][close_ind]
+        print(time.time() - tic)
+    svc_mask_hmask[(used_utc  == 0), :] = -9999
+    svc_mask_lon[(used_utc  == 0)] = -9999
+    svc_mask_lat[(used_utc  == 0)] = -9999
+    svc_mask_time_diff[(used_utc  == 0)] = -9999
+    svc_mask_time[(used_utc  == 0)] = -9999
+    print('done with SVC')
+    return svc_mask_hmask, svc_mask_lon, svc_mask_lat, svc_mask_time_diff, svc_mask_time
+
+
 def getInitFiles(mD, y, m, dn, uD, lt=True, ct=True):
+
     outname = 'CALIOP-EAD-%d%02d-%s' %(y, m, dn)
-    
     if uD:
         outname = outname + '-DD'
+    # outnamesTL.append(outname)
+    trajDir = os.path.join(mD,outname)
+    initDir = os.path.join(trajDir, 'Initfiles')
+    
     tempname = os.path.join(mD,'TempFiles', '%s-init.h5' %(outname))
     if (lt and os.path.isfile(tempname)):
-        lons0_mon, lats0_mon, p0_mon, t0_mon, sh_mon, vod_mon, height_mon, cm_mon, sc_mon, rvs0_mon, iwc0_mon = readTempFileInit(tempname)
+        lons0_mon, lats0_mon, p0_mon, t0_mon, sh_mon, vod_mon, height_mon, cm_mon, sc_mon, rvs0_mon, iwc0_mon, irs_mon, svc_mon = readTempFileInit(tempname)
+        if (irs_mon is None) and (y in [2007, 2008, 2009, 2010]):
+            print('Add irs to tempfile')
+            pf = readidx107(os.path.join(trajDir,'part_000'),quiet=False)
+            utc = convertIrStartToUTC(pf, reshape_col=34)
+            svc_hmask, svc_lon, svc_lat, svc_tdiff, svc = findSVC(y, m, utc, pf, lons0_mon, lats0_mon)
+            addVarToTemp(tempname, svc_hmask, 'svc_hmask')
+            addVarToTemp(tempname, svc_lon, 'svc_lon')
+            addVarToTemp(tempname, svc_lat, 'svc_lat')
+            addVarToTemp(tempname, svc_tdiff, 'svc_tdiff')
+#             addVarToTemp(tempname, svc_utc, 'svc_utc')
+            addVarToTemp(tempname, pf['ir_start'], 'ir_start')
+            addVarToTemp(tempname, [pf['stamp_date']], 'stamp_date')
+            print('SVC is added to the tempfile')
+            print('Closing program')
+            sys.exit()
+            
     else:
-        # outnamesTL.append(outname)
-        trajDir = os.path.join(mD,outname) 
-        initDir = os.path.join(trajDir, 'Initfiles')
-        
         paramname = 'selDardar_Params-%s.pkl' %'-'.join(outname.split('-')[2:4])
         catalogname = paramname.replace('_Params-', '_Calalog-')
         # paramFile = os.path.join(initDir, paramname)
@@ -575,7 +721,43 @@ def getInitFiles(mD, y, m, dn, uD, lt=True, ct=True):
         sc_mon = cf['SC']
         rvs0_mon = esati_murphy(p0_mon, t0_mon)
         iwc0_mon = convIWC(cf['iwc'], p0_mon, t0_mon, sh_mon)
-        # cloudy = ((catalog['SC']>0) & (catalog['SC']<5))
+        
+        utc = convertIrStartToUTC(pf, reshape_col=34)
+        svc_hmask, svc_lon, svc_lat, svc_tdiff, svc = findSVC(y, m, utc, pf, lons0_mon, lats0_mon)
+        
+#         def nearest_ind(items, pivot):
+#             time_diff = np.abs([date - pivot for date in items])
+#             return time_diff.argmin(0)
+        
+#         fig = plt.figure()
+#         fig.suptitle('2008-07-03, Time 01:02 - 01:12')
+#         ax = fig.add_subplot(1,2,1,projection=ccrs.PlateCarree())
+#         ax.set_extent([0, 30, -30, 30], crs=ccrs.PlateCarree())
+#         ax.coastlines()
+#         ax.plot(lons0_mon[org_cut_inds_file], lats0_mon[org_cut_inds_file], 'r+', label='DARDAR')
+#         ax.plot(np.asarray(redmask['longitude'])[file_cut_inds], np.asarray(redmask['latitude'])[file_cut_inds], 'b+', label='SVC-MASK')
+#         ax.set_xticks([0, 15, 30], crs=ccrs.PlateCarree())
+#         ax.set_xticklabels(['0', '15', '30'], fontsize='large')
+#         ax.set_yticks([-30, 0, 30], crs=ccrs.PlateCarree())
+#         ax.set_yticklabels(['-30', '0', '30'], fontsize='large')
+#         ax.set_xlabel('Longitude')
+#         ax.set_ylabel('Latitude')
+#         ax.legend()
+#         
+#         ax = fig.add_subplot(1,2,2,projection=ccrs.PlateCarree())
+#         ax.set_extent([5, 15, -5, 20], crs=ccrs.PlateCarree())
+#         ax.coastlines()
+#         ax.plot(lons0_mon[org_cut_inds_file][1:][::18], lats0_mon[org_cut_inds_file][1:][::18], 'r+', label='DARDAR')
+#         ax.plot(np.asarray(redmask['longitude'])[file_cut_inds][1:][::18], np.asarray(redmask['latitude'])[file_cut_inds][1:][::18], 'b+', label='SVC-MASK')
+#         ax.set_xticks([5, 10, 15], crs=ccrs.PlateCarree())
+#         ax.set_xticklabels(['5', '10', '15'], fontsize='large')
+#         ax.set_yticks([0, 10, 20], crs=ccrs.PlateCarree())
+#         ax.set_yticklabels(['0', '10', '20'], fontsize='large')
+#         ax.set_xlabel('Longitude')
+#         ax.set_ylabel('Latitude')
+# #         ax.legend()
+#         fig.savefig('svc_mask' + '.png')
+        
         if ct:
             print('Create Temp File')
             try:
@@ -593,6 +775,13 @@ def getInitFiles(mD, y, m, dn, uD, lt=True, ct=True):
                 
                 h5file.create_dataset('rvs0', data = rvs0_mon)
                 h5file.create_dataset('iwc0', data = iwc0_mon)
+                
+                h5file.create_dataset('svc_hmask', data = svc_hmask)
+                h5file.create_dataset('svc_lon', data = svc_lon)
+                h5file.create_dataset('svc_lat', data = svc_lat)
+                h5file.create_dataset('svc_tdiff', data = svc_tdiff)
+                h5file.create_dataset('ir_start', data = pf['ir_start'])
+                h5file.create_dataset('stamp_date', data = [pf['stamp_date']])
                 
                 h5file.close()
             except:
@@ -739,6 +928,17 @@ def readTempFileInit(fn):
     rvs0 = h5f['rvs0'][:]
     iwc0 = h5f['iwc0'][:]
     
+    #: updating the tempfiles with new variables
+    if 'ir_start' in h5f.keys():
+        irs = h5f['ir_start'][:]
+        svc = {'svc_hmask': h5f['svc_hmask'][:], 'svc_lon': h5f['svc_lon'][:], \
+               'svc_lat': h5f['svc_lat'][:], 'svc_tdiff': h5f['svc_tdiff'][:], \
+               'ir_start': h5f['ir_start'][:], 'stamp_date': h5f['stamp_date'][:]}
+    else:
+        irs = None
+        svc = None
+    
+    
     h5f.close()
     
     
@@ -749,7 +949,7 @@ def readTempFileInit(fn):
     #           'part0_p': h5f['part0_p'][:], 'part0_t': h5f['part0_t'][:], \
     #           'pressure': h5f['pressure'][:], 'temperature': h5f['temperature'][:]}
 
-    return lons, lats, p0, t0, sh, vod, height, cm, sc, rvs0, iwc0
+    return lons, lats, p0, t0, sh, vod, height, cm, sc, rvs0, iwc0, irs, svc
 
 def readTempFileConv(fn):
     h5f = h5py.File(fn, 'r')   
@@ -814,6 +1014,7 @@ if __name__ == '__main__':
     compare = False
     dn = 'n'
     useDardar = True
+    clType = 'clr'
     area = getAreaName(args.area)
     
     lt = args.lt
@@ -852,7 +1053,10 @@ if __name__ == '__main__':
         ses_tit = 'Month %02d' %args.month
     if args.year == 0:
         # years = [*range(2007,2020)]
-        years = [*range(2007,2020)]
+        if clType == 'clr':
+            years = [*range(2007,2011)]
+        else:
+            years = [*range(2007,2020)]
         ses = ses
         ses_tit = ses_tit
     else:
@@ -880,7 +1084,6 @@ if __name__ == '__main__':
             if args.temp:
                 continue
             
-            
             fname = os.path.join(outDir, outnames[1] + '.h5')
             rvs_mon, fls_mon, age_mon, lons_mon, lats_mon, temp_mon, pres_mon = readConvFile(fname)
             print(time.time() - tic)
@@ -899,7 +1102,6 @@ if __name__ == '__main__':
                 typeName = 'all'
             lons_mon = checkLons(lons_mon, typeInd)
             
-            clType = 'cld'
             if clType == 'cld':
                 clInd = iwc0_mon > 0
             elif clType == 'cld_thin':
@@ -925,8 +1127,9 @@ if __name__ == '__main__':
                 lats = lats_mon[useInds]
                 fls = fls_mon[useInds]
                 age = age_mon[useInds]
-            
-            
+                hh1f, xedges, yedges = np.histogram2d(age / 86400, height0*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]], density=True)
+                hh3f = hh1f * np.diff(yedges)
+                hh2f, xedges, yedges = np.histogram2d(age / 86400, height0*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]])
             else:
                 lons0 = np.concatenate((lons0, lons0_mon[useInds]))
                 lats0 = np.concatenate((lats0, lats0_mon[useInds]))
@@ -936,7 +1139,16 @@ if __name__ == '__main__':
                 fls = np.concatenate((fls, fls_mon[useInds]))
                 lons = np.concatenate((lons, lons_mon[useInds]))
                 lats = np.concatenate((lats, lats_mon[useInds]))
+                hh1a, xedges, yedges = np.histogram2d(age_mon[useInds] / 86400, height0_mon[useInds]*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]], density=True)
+                hh3a = hh1a * np.diff(yedges)
+                hh2a, xedges, yedges = np.histogram2d(age_mon[useInds] / 86400, height0_mon[useInds]*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]])
                 age = np.concatenate((age, age_mon[useInds]))
+                
+                
+                hh1t, xedges, yedges = np.histogram2d(age / 86400, height0*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]], density=True)
+                hh3t = hh1t * np.diff(yedges)
+                hh2t, xedges, yedges = np.histogram2d(age / 86400, height0*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]])
+                pdb.set_trace()
                 # = np.concatenate(())
                 # = np.concatenate(())
                 # = np.concatenate(())
@@ -989,6 +1201,8 @@ if __name__ == '__main__':
     elif clType == 'clr':
         title_org = '%s and Clear pixels' %useType.title()
         figname_end = '%s_clr' %(figname_end)
+        vmax1 = 0.003
+        vmax2 = 10000
         vmax = 50000
     figname_org = '%s/2dhist_height_%s' %(plotDir, figname_end)
     inds = np.ones(age.shape[0]).astype(bool)
@@ -997,8 +1211,8 @@ if __name__ == '__main__':
     fig = plt.figure(figsize=(6, 8))
     ax = fig.add_subplot(2,1,1)
     # hh = ax.hist2d(age[inds] / 86400, height0[inds]*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]], density=True)#, vmin=0, vmax=vmax)#, bins=400)
-    hh1, xedges, yedges = np.histogram2d(age[inds] / 86400, height0[inds]*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]], density=True)
-    hh1 = (hh1 * np.diff(yedges))         
+    hh1e, xedges, yedges = np.histogram2d(age[inds] / 86400, height0[inds]*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]], density=True)
+    hh1 = (hh1e * np.diff(yedges))         
     aspect = float('%.2f' %((1.) / ((yedges[0] - yedges[-1]) / (xedges[0] - xedges[-1]))))
     im = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]], vmin=0, vmax=vmax1)
     # ax.set_xlabel('Age [days]', fontsize='x-large')
