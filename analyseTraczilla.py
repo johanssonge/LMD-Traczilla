@@ -1014,7 +1014,7 @@ if __name__ == '__main__':
     compare = False
     dn = 'n'
     useDardar = True
-    clType = 'cld'
+#     clType = 'cld'
     area = getAreaName(args.area)
     
     lt = args.lt
@@ -1053,10 +1053,10 @@ if __name__ == '__main__':
         ses_tit = 'Month %02d' %args.month
     if args.year == 0:
         # years = [*range(2007,2020)]
-        if clType == 'clr':
-            years = [*range(2007,2011)]
-        else:
-            years = [*range(2007,2020)]
+#         if clType == 'clr':
+#             years = [*range(2007,2011)]
+#         else:
+        years = [*range(2007,2020)]
         ses = ses
         ses_tit = ses_tit
     else:
@@ -1068,7 +1068,9 @@ if __name__ == '__main__':
         years = [*range(2007,2020)]
         months = [*range(1,13)]
         ct = True
-        
+    
+    heightBoundaries = [[None, None], [14,15], [15,16], [16, 17], [17, 18], [18, 19], [19, 20]]
+    useType = 'Hit'
     y = -1
     for year in years:
         for mon in months:
@@ -1081,15 +1083,31 @@ if __name__ == '__main__':
             
             histTempFile = '%s/TempFiles/Hist/histTemp-%s-%d%02d-n-DD.h5' %(mainDir, area, year, mon)
             if os.path.isfile(histTempFile) and (lt == True):
-                def readTempFileHist(fn):
+                def readTempFileHist(fn, hbs):
                     h5f = h5py.File(fn, 'r')   
-                    h1d = h5f['h1d'][:]
-                    h2d = h5f['h2d'][:]
+                    hh_h_cld = h5f['hh_h_cld'][:]
+                    hh_h_clr = h5f['hh_h_clr'][:]
+                    hh_p_cld = h5f['hh_p_cld'][:]
+                    hh_p_clr = h5f['hh_p_clr'][:]
+                    hh_h_xedges = h5f['hh_h_xedges'][:]
+                    hh_h_yedges = h5f['hh_h_yedges'][:]
+                    hh_p_xedges = h5f['hh_p_xedges'][:]
+                    hh_p_yedges = h5f['hh_p_yedges'][:]
+                    h_xedges = h5f['h_xedges'][:]
+                    hs = {}
+                    for h1, h2 in hbs:
+                        if not ((h1 is None) and (h2 is None)):
+                            hs_name_end = '_%d_%d' %(h1, h2)
+                        else:
+                            hs_name_end = ''
+                       
+                    hs.update({'h_cld%s' %hs_name_end: h5f['h_cld%s' %hs_name_end][:], \
+                               'h_clr%s' %hs_name_end: h5f['h_clr%s' %hs_name_end][:]})
                     h5f.close()
-                    return h1d, h2d 
-                
-                h1d, h2d = readTempFileHist(histTempFile)
-                pdb.set_trace()
+
+                    return hh_h_cld, hh_h_clr, hh_p_cld, hh_p_clr, hh_h_xedges, hh_h_yedges, hh_p_xedges, hh_p_yedges, h_xedges, hs 
+                #: All edges ned cld to fit with the names used when not reaing from a tempfile
+                hh_h_cld_mon, hh_h_clr_mon, hh_p_cld_mon, hh_p_clr_mon, hh_h_cld_xedges, hh_h_cld_yedges, hh_p_cld_xedges, hh_p_cld_yedges, h_cld_xedges, hs_mon = readTempFileHist(histTempFile, heightBoundaries)
             else:
                 tic=time.time()
                 outnames, lons0_mon, lats0_mon, p0_mon, t0_mon, sh0_mon, vod0_mon, height0_mon, cm0_mon, sc0_mon, rvs0_mon, iwc0_mon = getInitFiles(mainDir, year, mon, dn, useDardar, lt=lt)
@@ -1097,119 +1115,193 @@ if __name__ == '__main__':
                     continue
                 
                 fname = os.path.join(outDir, outnames[1] + '.h5')
-                rvs_mon, fls_mon, age_mon, lons_mon, lats_mon, temp_mon, pres_mon = readConvFile(fname)
+                rvsC_mon, flsC_mon, ageC_mon, lonsC_mon, latsC_mon, tC_mon, pC_mon = readConvFile(fname)
                 print(time.time() - tic)
                 if False:
-                    lons_mon = normalizeLons(lons_mon, lats_mon)
+                    lonsC_mon = normalizeLons(lonsC_mon, latsC_mon)
                     lons0_mon = normalizeLons(lons0_mon, lats0_mon)
                 llInd = getAreaInds(area, lats0_mon, lons0_mon)
-                useType = 'Hit'
+                
                 if useType == 'Hit':
-                    typeInd = (fls_mon & I_HIT) == I_HIT
+                    typeInd = (flsC_mon & I_HIT) == I_HIT
                     typeName = 'hits'
                 elif useType == 'Old':
-                    typeInd = (fls_mon & I_OLD) == I_OLD
+                    typeInd = (flsC_mon & I_OLD) == I_OLD
                     typeName = 'olds'
                 else:
-                    typeInd = np.ones(fls_mon.shape).astype(bool)
+                    typeInd = np.ones(flsC_mon.shape).astype(bool)
                     typeName = 'all'
-                lons_mon = checkLons(lons_mon, typeInd)
-                
-    #                 for clType in ['cld', 'clr']
-                if clType == 'cld':
-                    clInd = iwc0_mon > 0
-                elif clType == 'cld_thin':
-                    clInd = (iwc0_mon > 0) & (vod0_mon < 0.03)
-                elif clType == 'clr':
-                    clInd = ~(iwc0_mon > 0)
-                else:
-                    clInd = np.ones(fls_mon.shape).astype(bool)
-                    clType = 'all'
+                lonsC_mon = checkLons(lonsC_mon, typeInd)
                 clInd_cld = iwc0_mon > 0
                 clInd_clr = ~(iwc0_mon > 0)
+                clInd_all = np.ones(flsC_mon.shape).astype(bool)
                 useInds_cld = typeInd & clInd_cld & llInd
                 useInds_clr = typeInd & clInd_clr & llInd
+                useInds_all = typeInd & clInd_all & llInd
                 
+    #                 for clType in ['cld', 'clr']
+                #===============================================================
+                # if clType == 'cld':
+                #     clInd = iwc0_mon > 0
+                # elif clType == 'cld_thin':
+                #     clInd = (iwc0_mon > 0) & (vod0_mon < 0.03)
+                # elif clType == 'clr':
+                #     clInd = ~(iwc0_mon > 0)
+                # else:
+                #     clInd = np.ones(fls_mon.shape).astype(bool)
+                #     clType = 'all'
+                # clInd_cld = iwc0_mon > 0
+                # clInd_clr = ~(iwc0_mon > 0)
+                # useInds_cld = typeInd & clInd_cld & llInd
+                # useInds_clr = typeInd & clInd_clr & llInd
+                # 
+                #===============================================================
                 #: Potential temperature
                 p_0 = 101350 #: Pa
-                pt_mon = ((p_0 / p0_mon)**(0.286)) * t0_mon
-                if y == 0:
-                    lons0_cld = lons0_mon[useInds_cld]
-                    lats0_cld = lats0_mon[useInds_cld]
-                    vod0_cld = vod0_mon[useInds_cld]
-                    height0_cld = height0_mon[useInds_cld]
-                    pt_cld = pt_mon[useInds_cld]
-                    
-                    lons_cld = lons_mon[useInds_cld]
-                    lats_cld = lats_mon[useInds_cld]
-                    fls_cld = fls_mon[useInds_cld]
-                    age_cld = age_mon[useInds_cld]
-                    
-                    
-                    lons0_clr = lons0_mon[useInds_clr]
-                    lats0_clr = lats0_mon[useInds_clr]
-                    vod0_clr = vod0_mon[useInds_clr]
-                    height0_clr = height0_mon[useInds_clr]
-                    pt_clr = pt_mon[useInds_clr]
-                    
-                    lons_clr = lons_mon[useInds_clr]
-                    lats_clr = lats_mon[useInds_clr]
-                    fls_clr = fls_mon[useInds_clr]
-                    age_clr = age_mon[useInds_clr]
-                    
-    #                 hh1f, xedges, yedges = np.histogram2d(age_cld / 86400, height0_cld*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]], density=True)
-    #                 hh3f = hh1f * np.diff(yedges)
-                    hh2f, xedges, yedges = np.histogram2d(age_cld / 86400, height0_cld*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]])
-                    hist_sum = {'hh2': hh2f, 'hh2_%02d' %(y): hh2f, '2d_xedges_%02d' %(y): xedges, '2d_yedges_%02d' %(y): yedges}
-    #                 h1f, xedges = np.histogram(age_cld / 86400, bins=range(0,201), density=True)
-    #                 h3f = h1f * np.diff(xedges)
-                    h2f, xedges = np.histogram(age_cld / 86400, bins=range(0,201))
-                    hist_sum.update({'h2': h2f, 'h2_%02d' %(y): h2f, '1d_xedges_%02d' %(y): xedges})
-                else:
-                    lons0_cld = np.concatenate((lons0_cld, lons0_mon[useInds_cld]))
-                    lats0_cld = np.concatenate((lats0_cld, lats0_mon[useInds_cld]))
-                    vod0_cld = np.concatenate((vod0_cld, vod0_mon[useInds_cld]))
-                    height0_cld = np.concatenate((height0_cld, height0_mon[useInds_cld]))
-                    pt_cld = np.concatenate((pt_cld, pt_mon[useInds_cld]))
-                    
-                    fls_cld = np.concatenate((fls_cld, fls_mon[useInds_cld]))
-                    lons_cld = np.concatenate((lons_cld, lons_mon[useInds_cld]))
-                    lats_cld = np.concatenate((lats_cld, lats_mon[useInds_cld]))
-                    age_cld = np.concatenate((age_cld, age_mon[useInds_cld]))
-                    
-                    
-                    lons0_clr = np.concatenate((lons0_clr, lons0_mon[useInds_clr]))
-                    lats0_clr = np.concatenate((lats0_clr, lats0_mon[useInds_clr]))
-                    vod0_clr = np.concatenate((vod0_clr, vod0_mon[useInds_clr]))
-                    height0_clr = np.concatenate((height0_clr, height0_mon[useInds_clr]))
-                    pt_clr = np.concatenate((pt_clr, pt_mon[useInds_clr]))
+                pt0_mon = ((p_0 / p0_mon)**(0.286)) * t0_mon
+                ptC_mon = ((p_0 / pC_mon)**(0.286)) * tC_mon
+                lons0_cld = lons0_mon[useInds_cld]
+                lats0_cld = lats0_mon[useInds_cld]
+                vod0_cld = vod0_mon[useInds_cld]
+                height0_cld = height0_mon[useInds_cld]
+                pt0_cld = pt0_mon[useInds_cld]
+
+                lonsC_cld = lonsC_mon[useInds_cld]
+                latsC_cld = latsC_mon[useInds_cld]
+                flsC_cld = flsC_mon[useInds_cld]
+                ageC_cld = ageC_mon[useInds_cld]
+                ptC_cld = ptC_mon[useInds_cld]
+
+                lons0_clr = lons0_mon[useInds_clr]
+                lats0_clr = lats0_mon[useInds_clr]
+                vod0_clr = vod0_mon[useInds_clr]
+                height0_clr = height0_mon[useInds_clr]
+                pt0_clr = pt0_mon[useInds_clr]
+
+                lonsC_clr = lonsC_mon[useInds_clr]
+                latsC_clr = latsC_mon[useInds_clr]
+                flsC_clr = flsC_mon[useInds_clr]
+                ageC_clr = ageC_mon[useInds_clr]
+                ptC_clr = ptC_mon[useInds_clr]
                 
-                    fls_clr = np.concatenate((fls_clr, fls_mon[useInds_clr]))
-                    lons_clr = np.concatenate((lons_clr, lons_mon[useInds_clr]))
-                    lats_clr = np.concatenate((lats_clr, lats_mon[useInds_clr]))
-                    age_clr = np.concatenate((age_clr, age_mon[useInds_clr]))
-                    
-#                 hh1a, xedges, yedges = np.histogram2d(age_mon[useInds_cld] / 86400, height0_mon[useInds_cld]*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]], density=True)
-#                 hh3a = hh1a * np.diff(yedges)
-                hh2a, xedges, yedges = np.histogram2d(age_mon[useInds_cld] / 86400, height0_mon[useInds_cld]*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]])
-                hist_sum.update({'hh2': hist_sum['hh2'] + hh2a, 'hh2_%02d' %(y): hh2a, '2d_xedges_%02d' %(y): xedges, '2d_yedges_%02d' %(y): yedges})
-#                 hh1t, xedges, yedges = np.histogram2d(age_cld / 86400, height0_cld*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]], density=True)
-#                 hh3t = hh1t * np.diff(yedges)
-#                 hh2t, xedges, yedges = np.histogram2d(age_cld / 86400, height0_cld*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]])
-#                 
+                hh_h_cld_mon, hh_h_cld_xedges, hh_h_cld_yedges = np.histogram2d(ageC_cld / 86400, height0_cld*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]])
+                hh_h_clr_mon, hh_h_clr_xedges, hh_h_clr_yedges = np.histogram2d(ageC_clr / 86400, height0_clr*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]])
+                hh_p_cld_mon, hh_p_cld_xedges, hh_p_cld_yedges = np.histogram2d(ageC_cld / 86400, pt0_cld, bins=[[*range(0,201)], [*range(340,441, 1)]])
+                hh_p_clr_mon, hh_p_clr_xedges, hh_p_clr_yedges = np.histogram2d(ageC_clr / 86400, pt0_clr, bins=[[*range(0,201)], [*range(340,441, 1)]])
+                hs_mon = {}
                 
-#                 h1a, xedges = np.histogram(age_mon[useInds_cld] / 86400, bins=[*range(0,201)], density=True)
-#                 h3a = h1a * np.diff(xedges)
-                h2a, xedges = np.histogram(age_mon[useInds_cld] / 86400, bins=[*range(0,201)])
-                hist_sum.update({'h2': hist_sum['h2'] + h2a, 'h2_%02d' %(y): h2a, '1d_xedges_%02d' %(y): xedges})
-#                 h1t, xedges = np.histogram(age_cld / 86400, bins=[*range(0,201)], density=True)
-#                 h3t = h1t * np.diff(xedges)
-#                 h2t, xedges = np.histogram(age_cld / 86400, bins=[*range(0,201)])
-#                 pdb.set_trace()
-                # = np.concatenate(())
-                # = np.concatenate(())
-                # = np.concatenate(())
+                for h1, h2 in heightBoundaries:
+                    if not ((h1 is None) and (h2 is None)):
+                        if h2 == heightBoundaries[-1][1]:
+                            inds_h_cld = (height0_cld >= h1) & (height0_cld <= h2)
+                            inds_h_clr = (height0_clr >= h1) & (height0_clr <= h2)
+                        else:
+                            inds_h_cld = (height0_cld >= h1) & (height0_cld < h2)
+                            inds_h_clr = (height0_clr >= h1) & (height0_clr < h2)
+                        inds_cld = inds_h_cld
+                        inds_clr = inds_h_clr
+                        hs_name_end = '_%d_%d' %(h1, h2)
+                    else:
+                        inds_cld = np.ones(ageC_cld.shape[0]).astype(bool)
+                        inds_clr = np.ones(ageC_clr.shape[0]).astype(bool)
+                        hs_name_end = ''
+                    if (inds_cld.sum() == 0) and (inds_clr.sum() == 0):
+                        continue
+                       
+                    h_cld, h_cld_xedges = np.histogram(ageC_cld[inds_cld] / 86400, bins=range(0,201))
+                    h_clr, h_clr_xedges = np.histogram(ageC_clr[inds_clr] / 86400, bins=range(0,201))
+                    hs_mon.update({'h_cld%s' %hs_name_end: h_cld, 'h_cld_xedges%s' %hs_name_end: h_cld_xedges, \
+                               'h_clr%s' %hs_name_end: h_clr, 'h_clr_xedges%s' %hs_name_end: h_clr_xedges})
+                    
             
+                h5f = h5py.File(histTempFile, 'w')
+                h5f.create_dataset('hh_h_cld', data = hh_h_cld_mon)
+                h5f.create_dataset('hh_h_clr', data = hh_h_clr_mon)
+                h5f.create_dataset('hh_h_xedges', data = hh_h_cld_xedges)
+                h5f.create_dataset('hh_h_yedges', data = hh_h_cld_yedges)
+                h5f.create_dataset('hh_p_cld', data = hh_p_cld_mon)
+                h5f.create_dataset('hh_p_clr', data = hh_p_clr_mon)
+                h5f.create_dataset('hh_p_xedges', data = hh_p_cld_xedges)
+                h5f.create_dataset('hh_p_yedges', data = hh_p_cld_yedges)
+                h5f.create_dataset('h_xedges', data = h_cld_xedges)
+                for arrname, arrdata in hs_mon.items():
+                    if 'xedges' in arrname:
+                        continue
+                    h5f.create_dataset(arrname, data = arrdata)
+                h5f.close()
+            if y == 0:
+                hh_h_cld = hh_h_cld_mon
+                hh_h_clr = hh_h_clr_mon
+                hh_p_cld = hh_p_cld_mon
+                hh_p_clr = hh_p_clr_mon
+                hh_h_xedges = hh_h_cld_xedges
+                hh_h_yedges = hh_h_cld_yedges
+                hh_p_xedges = hh_p_cld_xedges
+                hh_p_yedges = hh_p_cld_yedges
+                h_xedges = h_cld_xedges
+                hs = hs_mon.copy()
+            else:
+                hh_h_cld = hh_h_cld + hh_h_cld_mon
+                hh_h_clr = hh_h_clr + hh_h_clr_mon
+                hh_p_cld = hh_p_cld + hh_p_cld_mon
+                hh_p_clr = hh_p_clr + hh_p_clr_mon
+                for arrname, arrdata in hs.items():
+                    if 'xedges' in arrname:
+                        continue
+                    hs[arrname] = hs[arrname] + hs_mon[arrname]
+                
+    #--------------------------- #                 hh3f = hh1f * np.diff(yedges)
+                    # hh2f, xedges, yedges = np.histogram2d(age_cld / 86400, height0_cld*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]])
+                    # hist_sum = {'hh2': hh2f, 'hh2_%02d' %(y): hh2f, '2d_xedges_%02d' %(y): xedges, '2d_yedges_%02d' %(y): yedges}
+    # #                 h1f, xedges = np.histogram(age_cld / 86400, bins=range(0,201), density=True)
+    #----------------------------- #                 h3f = h1f * np.diff(xedges)
+                    # h2f, xedges = np.histogram(age_cld / 86400, bins=range(0,201))
+                    # hist_sum.update({'h2': h2f, 'h2_%02d' %(y): h2f, '1d_xedges_%02d' %(y): xedges})
+                #--------------------------------------------------------- else:
+                    # lons0_cld = np.concatenate((lons0_cld, lons0_mon[useInds_cld]))
+                    # lats0_cld = np.concatenate((lats0_cld, lats0_mon[useInds_cld]))
+                    # vod0_cld = np.concatenate((vod0_cld, vod0_mon[useInds_cld]))
+                    # height0_cld = np.concatenate((height0_cld, height0_mon[useInds_cld]))
+                    #---- pt_cld = np.concatenate((pt_cld, pt_mon[useInds_cld]))
+#------------------------------------------------------------------------------ 
+                    #- fls_cld = np.concatenate((fls_cld, fls_mon[useInds_cld]))
+                    # lons_cld = np.concatenate((lons_cld, lons_mon[useInds_cld]))
+                    # lats_cld = np.concatenate((lats_cld, lats_mon[useInds_cld]))
+                    #- age_cld = np.concatenate((age_cld, age_mon[useInds_cld]))
+#------------------------------------------------------------------------------ 
+#------------------------------------------------------------------------------ 
+                    # lons0_clr = np.concatenate((lons0_clr, lons0_mon[useInds_clr]))
+                    # lats0_clr = np.concatenate((lats0_clr, lats0_mon[useInds_clr]))
+                    # vod0_clr = np.concatenate((vod0_clr, vod0_mon[useInds_clr]))
+                    # height0_clr = np.concatenate((height0_clr, height0_mon[useInds_clr]))
+                    #---- pt_clr = np.concatenate((pt_clr, pt_mon[useInds_clr]))
+#------------------------------------------------------------------------------ 
+                    #- fls_clr = np.concatenate((fls_clr, fls_mon[useInds_clr]))
+                    # lons_clr = np.concatenate((lons_clr, lons_mon[useInds_clr]))
+                    # lats_clr = np.concatenate((lats_clr, lats_mon[useInds_clr]))
+                    #- age_clr = np.concatenate((age_clr, age_mon[useInds_clr]))
+#------------------------------------------------------------------------------ 
+# #                 hh1a, xedges, yedges = np.histogram2d(age_mon[useInds_cld] / 86400, height0_mon[useInds_cld]*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]], density=True)
+#------------------------------- #                 hh3a = hh1a * np.diff(yedges)
+                # hh2a, xedges, yedges = np.histogram2d(age_mon[useInds_cld] / 86400, height0_mon[useInds_cld]*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]])
+                # hist_sum.update({'hh2': hist_sum['hh2'] + hh2a, 'hh2_%02d' %(y): hh2a, '2d_xedges_%02d' %(y): xedges, '2d_yedges_%02d' %(y): yedges})
+# #                 hh1t, xedges, yedges = np.histogram2d(age_cld / 86400, height0_cld*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]], density=True)
+#------------------------------- #                 hh3t = hh1t * np.diff(yedges)
+# #                 hh2t, xedges, yedges = np.histogram2d(age_cld / 86400, height0_cld*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]])
+#----------------------------------------------------------------------------- #
+#------------------------------------------------------------------------------ 
+# #                 h1a, xedges = np.histogram(age_mon[useInds_cld] / 86400, bins=[*range(0,201)], density=True)
+#--------------------------------- #                 h3a = h1a * np.diff(xedges)
+                # h2a, xedges = np.histogram(age_mon[useInds_cld] / 86400, bins=[*range(0,201)])
+                # hist_sum.update({'h2': hist_sum['h2'] + h2a, 'h2_%02d' %(y): h2a, '1d_xedges_%02d' %(y): xedges})
+# #                 h1t, xedges = np.histogram(age_cld / 86400, bins=[*range(0,201)], density=True)
+#--------------------------------- #                 h3t = h1t * np.diff(xedges)
+# #                 h2t, xedges = np.histogram(age_cld / 86400, bins=[*range(0,201)])
+#--------------------------------------------- #                 pdb.set_trace()
+                #---------------------------------------- # = np.concatenate(())
+                #---------------------------------------- # = np.concatenate(())
+                #---------------------------------------- # = np.concatenate(())
+                #===============================================================
             
     if args.temp:
         sys.exit()       
@@ -1233,138 +1325,149 @@ if __name__ == '__main__':
         lons4 = checkLons(lons4, hits4)
 
     #: --- Plot ---
-    if clType == 'clr':
-        inds_org = np.ones(age_clr.shape[0]).astype(bool)
-    else:
-        inds_org = np.ones(age_cld.shape[0]).astype(bool)
-    if inds_org.sum() == 0:
-        print("No match")
-        pdb.set_trace()
+#     if clType == 'clr':
+#         inds_org = np.ones(age_clr.shape[0]).astype(bool)
+#     else:_cld
+#         inds_org = np.ones(age_cld.shape[0]).astype(bool)
+#     if inds_org.sum() == 0:
+#         print("No match")
+#         pdb.set_trace()
     #
     
     # 2D-Histograms, potential Temperature vs Age 
     print('Plot 2D Histograms - pt')
+    hh1_p_clr = (hh_p_clr/np.diff(hh_p_yedges)/hh_p_clr.sum()) * np.diff(hh_p_yedges)
+    hh1_p_cld = (hh_p_cld/np.diff(hh_p_yedges)/hh_p_cld.sum()) * np.diff(hh_p_yedges)
+    hh2_p_clr = hh_p_clr
+    hh2_p_cld = hh_p_cld
     # for ctyp in ['all', 'cld', 'cld_thin', 'clr']:
     figname_end = '%s_%s_%s' %(ses, area.replace(' ', '_').replace('(', '').replace(')', ''),  useType.lower())
+    clType = 'b'
     if clType == 'all':
         title_org = '%s pixels' %useType.title()
         figname_end = '%s_all' %(figname_end)
         vmax = 100000
-    elif clType == 'cld':
-        title_org = '%s and Cloudy pixels' %useType.title()
-        figname_end = '%s_cld' %(figname_end)
-        vmax1 = 0.0001
-        vmax2 = 1000
-        age = age_cld
-        height0 = height0_cld
-        pt = pt_cld
     elif clType == 'cld_thin':
         title_org = '%s and Thin Cloudy pixels' %useType.title()
         figname_end = '%s_cld_thin' %(figname_end)
         vmax = 10000
-    elif clType == 'clr':
-        title_org = '%s and Clear pixels' %useType.title()
-        figname_end = '%s_clr' %(figname_end)
-        vmax1 = 0.0003
-        vmax2 = 30000
-        age = age_clr
-        height0 = height0_clr
-        pt = pt_clr
+    elif clType == 'b':
+        title_org = '%s pixels' %useType.title()
+        figname_end = '%s' %(figname_end)
+        vmax1_cld = 0.0002
+        vmax2_cld = 1000
+#         age = age_cld
+#         pt = pt_cld
+        vmax1_clr = 0.0002
+        vmax2_clr = 30000
+#         age = age_clr
+#         pt = pt_clr
     figname_org = '%s/2dhist_pt_%s' %(plotDir, figname_end)
-    inds = np.ones(age.shape[0]).astype(bool)
     figname = figname_org
-    title = title_org
-    fig = plt.figure(figsize=(6, 8))
-    ax = fig.add_subplot(2,1,1)
-    # hh = ax.hist2d(age[inds] / 86400, height0[inds]*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]], density=True)#, vmin=0, vmax=vmax)#, bins=400)
-    hh1e, xedges, yedges = np.histogram2d(age[inds] / 86400, pt[inds], bins=[[*range(0,201)], [*range(340,441, 1)]], density=True)
-    hh1 = (hh1e * np.diff(yedges))
-    aspect = float('%.2f' %((1.) / ((yedges[0] - yedges[-1]) / (xedges[0] - xedges[-1]))))
-    im = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]], vmin=0, vmax=vmax1)
-#     ax.plot((np.diff(xedges)/2) + xedges[0:-1], np.argmax(hh1, axis=1), 'r')
-    # ax.set_xlabel('Age [days]', fontsize='x-large')
+    suptitle = title_org
+    title_clr = 'Clear'
+    title_cld = 'Cloudy'
+    fig = plt.figure(figsize=(8, 8))
+    ax = fig.add_subplot(2,2,1)
+    ax.set_title(title_clr)
+#     hh1e, xedges, yedges = np.histogram2d(age[inds] / 86400, pt[inds], bins=[[*range(0,201)], [*range(340,441, 1)]], density=True)
+    aspect = float('%.2f' %((1.) / ((hh_p_yedges[0] - hh_p_yedges[-1]) / (hh_p_xedges[0] - hh_p_xedges[-1]))))
+    im = ax.imshow(hh1_p_clr.T, origin ='lower', aspect=aspect, extent = [hh_p_xedges[0], hh_p_xedges[-1], hh_p_yedges[0], hh_p_yedges[-1]], vmin=0, vmax=vmax1_clr)
     ax.set_ylabel('Potential Temperature', fontsize='x-large')
-#     ax.set_yticklabels((ax.get_yticks()/1000).astype(int))
     # fig.subplots_adjust(right=0.89)
     cbar = fig.colorbar(im)#, label='[1 / day]')#, cax=cbar_ax)
-    ax = fig.add_subplot(2,1,2)
-    # hh = ax.hist2d(age[inds] / 86400, height0[inds]*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]], density=True)#, vmin=0, vmax=vmax)#, bins=400)
-    hh2, xedges, yedges = np.histogram2d(age[inds] / 86400, pt[inds], bins=[[*range(0,201)], [*range(340,441, 1)]])
-    aspect = float('%.2f' %((1.) / ((yedges[0] - yedges[-1]) / (xedges[0] - xedges[-1]))))
+    ax = fig.add_subplot(2,2,3)
+#     hh2, xedges, yedges = np.histogram2d(age[inds] / 86400, pt[inds], bins=[[*range(0,201)], [*range(340,441, 1)]])
+#     aspect = float('%.2f' %((1.) / ((yedges[0] - yedges[-1]) / (xedges[0] - xedges[-1]))))
 #     aspect = float('%.2f' %((1.) / ((yedges.shape[0]) / (xedges.shape[0]))))
-    im = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]], vmin=0, vmax=vmax2)
+    im = ax.imshow(hh2_p_clr.T, origin ='lower', aspect=aspect, extent = [hh_p_xedges[0], hh_p_xedges[-1], hh_p_yedges[0], hh_p_yedges[-1]], vmin=0, vmax=vmax2_clr)
 #     ax.plot((np.diff(xedges)/2) + xedges[0:-1], np.argmax(hh1, axis=1)*500+14000, 'r')
     ax.set_xlabel('Age [days]', fontsize='x-large')
     ax.set_ylabel('Potential Temperature', fontsize='x-large')
 #     ax.set_yticklabels((ax.get_yticks()/1000).astype(int))
+    cbar = fig.colorbar(im)#, orientation='horizontal')#, label='[1 / day]')#, cax=cbar_ax)
+    ax = fig.add_subplot(2,2,2)
+    ax.set_title(title_cld)
+    aspect = float('%.2f' %((1.) / ((hh_p_yedges[0] - hh_p_yedges[-1]) / (hh_p_xedges[0] - hh_p_xedges[-1]))))
+    im = ax.imshow(hh1_p_cld.T, origin ='lower', aspect=aspect, extent = [hh_p_xedges[0], hh_p_xedges[-1], hh_p_yedges[0], hh_p_yedges[-1]], vmin=0, vmax=vmax1_cld)
+    ax.tick_params(labelleft = False)
+    cbar = fig.colorbar(im)
+    ax = fig.add_subplot(2,2,4)
+    ax.set_xlabel('Age [days]', fontsize='x-large')
+    im = ax.imshow(hh2_p_cld.T, origin ='lower', aspect=aspect, extent = [hh_p_xedges[0], hh_p_xedges[-1], hh_p_yedges[0], hh_p_yedges[-1]], vmin=0, vmax=vmax2_cld)
+    ax.tick_params(labelleft = False)
+    cbar = fig.colorbar(im)
     fig.subplots_adjust(right=0.89)
-    cbar = fig.colorbar(im)#, label='[1 / day]')#, cax=cbar_ax)
-    
     print(figname)
     fig.savefig(figname + '.png')
-    pdb.set_trace()
+    
     # 2D-Histograms, Height vs Age 
     print('Plot 2D Histograms - height')
+    hh1_h_clr = (hh_h_clr/np.diff(hh_h_yedges)/hh_h_clr.sum()) * np.diff(hh_h_yedges)
+    hh1_h_cld = (hh_h_cld/np.diff(hh_h_yedges)/hh_h_cld.sum()) * np.diff(hh_h_yedges)
+    hh2_h_clr = hh_h_clr
+    hh2_h_cld = hh_h_cld
     # for ctyp in ['all', 'cld', 'cld_thin', 'clr']:
     figname_end = '%s_%s_%s' %(ses, area.replace(' ', '_').replace('(', '').replace(')', ''),  useType.lower())
     if clType == 'all':
         title_org = '%s pixels' %useType.title()
         figname_end = '%s_all' %(figname_end)
         vmax = 100000
-    elif clType == 'cld':
-        title_org = '%s and Cloudy pixels' %useType.title()
-        figname_end = '%s_cld' %(figname_end)
-        vmax1 = 0.001
-        vmax2 = 1000
-        age = age_cld
-        height0 = height0_cld
     elif clType == 'cld_thin':
         title_org = '%s and Thin Cloudy pixels' %useType.title()
         figname_end = '%s_cld_thin' %(figname_end)
         vmax = 10000
-    elif clType == 'clr':
-        title_org = '%s and Clear pixels' %useType.title()
-        figname_end = '%s_clr' %(figname_end)
-        vmax1 = 0.001
-        vmax2 = 50000
+    elif clType == 'b':
+        title_org = '%s pixels' %useType.title()
+        figname_end = '%s' %(figname_end)
+        vmax1_cld = 0.001
+        vmax2_cld = 1000
+#         age = age_cld
+#         height0 = height0_cld
+        vmax1_clr = 0.001
+        vmax2_clr = 50000
         vmax = 50000
-        age = age_clr
-        height0 = height0_clr
+#         age = age_clr
+#         height0 = height0_clr
+#     hh1e, xedges, yedges = np.histogram2d(age[inds] / 86400, pt[inds], bins=[[*range(0,201)], [*range(340,441, 1)]], density=True)
+    
     figname_org = '%s/2dhist_height_%s' %(plotDir, figname_end)
-    inds = np.ones(age.shape[0]).astype(bool)
     figname = figname_org
-    title = title_org
-    fig = plt.figure(figsize=(6, 8))
-    ax = fig.add_subplot(2,1,1)
-    # hh = ax.hist2d(age[inds] / 86400, height0[inds]*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]], density=True)#, vmin=0, vmax=vmax)#, bins=400)
-    hh1e, xedges, yedges = np.histogram2d(age[inds] / 86400, height0[inds]*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]], density=True)
-    hh1 = (hh1e * np.diff(yedges))         
-    aspect = float('%.2f' %((1.) / ((yedges[0] - yedges[-1]) / (xedges[0] - xedges[-1]))))
-    im = ax.imshow(hh1.T, origin ='lower', aspect=aspect, extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]], vmin=0, vmax=vmax1)
-    ax.plot((np.diff(xedges)/2) + xedges[0:-1], np.argmax(hh1, axis=1)*500+14000, 'r')
-    # ax.set_xlabel('Age [days]', fontsize='x-large')
+    suptitle = title_org
+    title_clr = 'Clear'
+    title_cld = 'Cloudy'
+    fig = plt.figure(figsize=(8, 8))
+    ax = fig.add_subplot(2,2,1)
+    ax.set_title(title_clr)
+    aspect = float('%.2f' %((1.) / ((hh_h_yedges[0] - hh_h_yedges[-1]) / (hh_h_xedges[0] - hh_h_xedges[-1])))) / 2
+    im = ax.imshow(hh1_h_clr.T, origin ='lower', aspect=aspect, extent = [hh_h_xedges[0], hh_h_xedges[-1], hh_h_yedges[0], hh_p_yedges[-1]], vmin=0, vmax=vmax1_clr)
+#     ax.plot((np.diff(xedges)/2) + xedges[0:-1], np.argmax(hh1, axis=1)*500+14000, 'r')
     ax.set_ylabel('Height [km]', fontsize='x-large')
     ax.set_yticklabels((ax.get_yticks()/1000).astype(int))
-    # fig.subplots_adjust(right=0.89)
-    cbar = fig.colorbar(im, label='[1 / day]')#, cax=cbar_ax)
-    ax = fig.add_subplot(2,1,2)
-    # hh = ax.hist2d(age[inds] / 86400, height0[inds]*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]], density=True)#, vmin=0, vmax=vmax)#, bins=400)
-    hh2, xedges, yedges = np.histogram2d(age[inds] / 86400, height0[inds]*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]])
-    aspect = float('%.2f' %((1.) / ((yedges[0] - yedges[-1]) / (xedges[0] - xedges[-1]))))
-    # aspect = float('%.2f' %((1.) / ((yedges.shape[0]) / (xedges.shape[0]))))
-    im = ax.imshow(hh2.T, origin ='lower', aspect=aspect, extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]], vmin=0, vmax=vmax2)
-    ax.plot((np.diff(xedges)/2) + xedges[0:-1], np.argmax(hh1, axis=1)*500+14000, 'r')
+    cbar = fig.colorbar(im)#, label='[1 / day]')#, cax=cbar_ax)
+
+    
+    ax = fig.add_subplot(2,2,3)
+    im = ax.imshow(hh2_h_clr.T, origin ='lower', aspect=aspect, extent = [hh_h_xedges[0], hh_h_xedges[-1], hh_h_yedges[0], hh_p_yedges[-1]], vmin=0, vmax=vmax2_clr)
+#     ax.plot((np.diff(xedges)/2) + xedges[0:-1], np.argmax(hh1, axis=1)*500+14000, 'r')
     ax.set_xlabel('Age [days]', fontsize='x-large')
     ax.set_ylabel('Height [km]', fontsize='x-large')
     ax.set_yticklabels((ax.get_yticks()/1000).astype(int))
-    fig.subplots_adjust(right=0.89)
+#     fig.subplots_adjust(right=0.89)
     cbar = fig.colorbar(im)#, label='[1 / day]')#, cax=cbar_ax)
 
-
+    ax = fig.add_subplot(2,2,2)
+    ax.set_title(title_cld)
+    im = ax.imshow(hh1_h_cld.T, origin ='lower', aspect=aspect, extent = [hh_h_xedges[0], hh_h_xedges[-1], hh_h_yedges[0], hh_p_yedges[-1]], vmin=0, vmax=vmax1_cld)
+    cbar = fig.colorbar(im)#, label='[1 / day]')#, cax=cbar_ax)
+    ax.tick_params(labelleft = False)
     
-    # cbar_ax = fig.add_axes([0.90, 0.13, 0.01, 0.30])
-    # cbar = fig.colorbar(hh[-1])#, label='[1 / day]')#, cax=cbar_ax)
-    
+    ax = fig.add_subplot(2,2,4)
+    im = ax.imshow(hh2_h_cld.T, origin ='lower', aspect=aspect, extent = [hh_h_xedges[0], hh_h_xedges[-1], hh_h_yedges[0], hh_p_yedges[-1]], vmin=0, vmax=vmax2_cld)
+    cbar = fig.colorbar(im)#, label='[1 / day]')#, cax=cbar_ax)
+    ax.set_xlabel('Age [days]', fontsize='x-large')
+    ax.tick_params(labelleft = False)
+    fig.subplots_adjust(right=0.89)
     print(figname)
     fig.savefig(figname + '.png')
     pdb.set_trace()
