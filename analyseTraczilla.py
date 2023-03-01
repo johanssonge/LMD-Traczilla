@@ -16,7 +16,7 @@ Copyright (c) 2021 Erik Johansson
 import numpy as np
 import h5py  # @UnresolvedImport
 import pdb
-# import matplotlib
+import matplotlib
 # matplotlib.use('Qt5Agg')
 from matplotlib import pyplot as plt  # @UnresolvedImport
 import cartopy.crs as ccrs  # @UnresolvedImport
@@ -980,6 +980,30 @@ def readTempFileConv(fn):
     return lons, lats, p0, t0, sh, vod, height, cm, sc, rvs0, iwc0
 
 
+def readTempFileHist(fn, hbs):
+    h5f = h5py.File(fn, 'r')   
+    hh_h_cld = h5f['hh_h_cld'][:]
+    hh_h_clr = h5f['hh_h_clr'][:]
+    hh_p_cld = h5f['hh_p_cld'][:]
+    hh_p_clr = h5f['hh_p_clr'][:]
+    hh_h_xedges = h5f['hh_h_xedges'][:]
+    hh_h_yedges = h5f['hh_h_yedges'][:]
+    hh_p_xedges = h5f['hh_p_xedges'][:]
+    hh_p_yedges = h5f['hh_p_yedges'][:]
+    h_xedges = h5f['h_xedges'][:]
+    hs = {}
+    for h1, h2 in hbs:
+        if not ((h1 is None) and (h2 is None)):
+            hs_name_end = '_%d_%d' %(h1, h2)
+        else:
+            hs_name_end = ''
+       
+        hs.update({'h_cld%s' %hs_name_end: h5f['h_cld%s' %hs_name_end][:], \
+                   'h_clr%s' %hs_name_end: h5f['h_clr%s' %hs_name_end][:]})
+    h5f.close()
+
+    return hh_h_cld, hh_h_clr, hh_p_cld, hh_p_clr, hh_h_xedges, hh_h_yedges, hh_p_xedges, hh_p_yedges, h_xedges, hs 
+                
 
 if __name__ == '__main__':
     import argparse
@@ -1056,7 +1080,7 @@ if __name__ == '__main__':
 #         if clType == 'clr':
 #             years = [*range(2007,2011)]
 #         else:
-        years = [*range(2007,2020)]
+        years = [*range(2007,2010)]
         ses = ses
         ses_tit = ses_tit
     else:
@@ -1083,29 +1107,7 @@ if __name__ == '__main__':
             
             histTempFile = '%s/TempFiles/Hist/histTemp-%s-%d%02d-n-DD.h5' %(mainDir, area, year, mon)
             if os.path.isfile(histTempFile) and (lt == True):
-                def readTempFileHist(fn, hbs):
-                    h5f = h5py.File(fn, 'r')   
-                    hh_h_cld = h5f['hh_h_cld'][:]
-                    hh_h_clr = h5f['hh_h_clr'][:]
-                    hh_p_cld = h5f['hh_p_cld'][:]
-                    hh_p_clr = h5f['hh_p_clr'][:]
-                    hh_h_xedges = h5f['hh_h_xedges'][:]
-                    hh_h_yedges = h5f['hh_h_yedges'][:]
-                    hh_p_xedges = h5f['hh_p_xedges'][:]
-                    hh_p_yedges = h5f['hh_p_yedges'][:]
-                    h_xedges = h5f['h_xedges'][:]
-                    hs = {}
-                    for h1, h2 in hbs:
-                        if not ((h1 is None) and (h2 is None)):
-                            hs_name_end = '_%d_%d' %(h1, h2)
-                        else:
-                            hs_name_end = ''
-                       
-                    hs.update({'h_cld%s' %hs_name_end: h5f['h_cld%s' %hs_name_end][:], \
-                               'h_clr%s' %hs_name_end: h5f['h_clr%s' %hs_name_end][:]})
-                    h5f.close()
-
-                    return hh_h_cld, hh_h_clr, hh_p_cld, hh_p_clr, hh_h_xedges, hh_h_yedges, hh_p_xedges, hh_p_yedges, h_xedges, hs 
+                
                 #: All edges ned cld to fit with the names used when not reaing from a tempfile
                 hh_h_cld_mon, hh_h_clr_mon, hh_p_cld_mon, hh_p_clr_mon, hh_h_cld_xedges, hh_h_cld_yedges, hh_p_cld_xedges, hh_p_cld_yedges, h_cld_xedges, hs_mon = readTempFileHist(histTempFile, heightBoundaries)
             else:
@@ -1184,6 +1186,15 @@ if __name__ == '__main__':
                 ageC_clr = ageC_mon[useInds_clr]
                 ptC_clr = ptC_mon[useInds_clr]
                 
+                #: For the map
+                map_0_cld_mon, map_0_cld_xedges, map_0_cld_yedges = np.histogram2d(lons0_cld, lats0_cld, bins=[180, 90])
+                map_0_clr_mon, map_0_clr_xedges, map_0_clr_yedges = np.histogram2d(lons0_clr, lats0_clr, bins=[180, 90])
+                map_c_cld_mon, map_c_cld_xedges, map_c_cld_yedges = np.histogram2d(lonsC_cld, latsC_cld, bins=[180, 90])
+                map_c_clr_mon, map_c_clr_xedges, map_c_clr_yedges = np.histogram2d(lonsC_clr, latsC_clr, bins=[180, 90])
+                pdb.set_trace()
+                sys.exit()
+                
+                
                 hh_h_cld_mon, hh_h_cld_xedges, hh_h_cld_yedges = np.histogram2d(ageC_cld / 86400, height0_cld*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]])
                 hh_h_clr_mon, hh_h_clr_xedges, hh_h_clr_yedges = np.histogram2d(ageC_clr / 86400, height0_clr*1000, bins=[[*range(0,201)], [*range(14000,20001, 500)]])
                 hh_p_cld_mon, hh_p_cld_xedges, hh_p_cld_yedges = np.histogram2d(ageC_cld / 86400, pt0_cld, bins=[[*range(0,201)], [*range(340,441, 1)]])
@@ -1215,6 +1226,14 @@ if __name__ == '__main__':
                     
             
                 h5f = h5py.File(histTempFile, 'w')
+                
+                #: All edges are the same so jut save one
+                h5f.create_dataset('map_xedges', data = map_0_cld_xedges)
+                h5f.create_dataset('map_yedges', data = map_0_cld_yedges)
+                h5f.create_dataset('map_0_cld', data = map_0_cld_mon)
+                h5f.create_dataset('map_0_clr', data = map_0_clr_mon)
+                h5f.create_dataset('map_c_cld', data = map_c_cld_mon)
+                h5f.create_dataset('map_c_clr', data = map_c_clr_mon)
                 h5f.create_dataset('hh_h_cld', data = hh_h_cld_mon)
                 h5f.create_dataset('hh_h_clr', data = hh_h_clr_mon)
                 h5f.create_dataset('hh_h_xedges', data = hh_h_cld_xedges)
@@ -1230,6 +1249,12 @@ if __name__ == '__main__':
                     h5f.create_dataset(arrname, data = arrdata)
                 h5f.close()
             if y == 0:
+                # map_xedges = map_0_cld_xedges
+                # map_yedges = map_0_cld_yedges
+                # map_0_cld = map_0_cld_mon
+                # map_0_clr = map_0_clr_mon
+                # map_c_cld = map_c_cld_mon
+                # map_c_clr = map_c_clr_mon
                 hh_h_cld = hh_h_cld_mon
                 hh_h_clr = hh_h_clr_mon
                 hh_p_cld = hh_p_cld_mon
@@ -1241,6 +1266,10 @@ if __name__ == '__main__':
                 h_xedges = h_cld_xedges
                 hs = hs_mon.copy()
             else:
+                # map_0_cld = map_0_cld + map_0_cld_mon
+                # map_0_clr = map_0_clr + map_0_clr_mon
+                # map_c_cld = map_c_cld + map_c_cld_mon
+                # map_c_clr = map_c_clr + map_c_clr_mon
                 hh_h_cld = hh_h_cld + hh_h_cld_mon
                 hh_h_clr = hh_h_clr + hh_h_clr_mon
                 hh_p_cld = hh_p_cld + hh_p_cld_mon
@@ -1333,11 +1362,10 @@ if __name__ == '__main__':
 #         print("No match")
 #         pdb.set_trace()
     #
-    
     # 2D-Histograms, potential Temperature vs Age 
     print('Plot 2D Histograms - pt')
-    hh1_p_clr = (hh_p_clr/np.diff(hh_p_yedges)/hh_p_clr.sum()) * np.diff(hh_p_yedges)
-    hh1_p_cld = (hh_p_cld/np.diff(hh_p_yedges)/hh_p_cld.sum()) * np.diff(hh_p_yedges)
+    hh1_p_clr = (hh_p_clr/np.repeat(np.diff(hh_p_xedges), hh_p_clr.shape[1]).reshape(hh_p_clr.shape[0],hh_p_clr.shape[1])/hh_p_clr.sum())#(hh_p_clr/np.diff(hh_p_xedges)/hh_p_clr.sum())# * np.diff(hh_p_yedges)
+    hh1_p_cld = (hh_p_cld/np.repeat(np.diff(hh_p_xedges), hh_p_cld.shape[1]).reshape(hh_p_cld.shape[0],hh_p_cld.shape[1])/hh_p_cld.sum())#(hh_p_cld/np.diff(hh_p_xedges)/hh_p_cld.sum())# * np.diff(hh_p_yedges)
     hh2_p_clr = hh_p_clr
     hh2_p_cld = hh_p_cld
     # for ctyp in ['all', 'cld', 'cld_thin', 'clr']:
@@ -1354,11 +1382,11 @@ if __name__ == '__main__':
     elif clType == 'b':
         title_org = '%s pixels' %useType.title()
         figname_end = '%s' %(figname_end)
-        vmax1_cld = 0.0002
+        vmax1_cld = 0.0001
         vmax2_cld = 1000
 #         age = age_cld
 #         pt = pt_cld
-        vmax1_clr = 0.0002
+        vmax1_clr = 0.0001
         vmax2_clr = 30000
 #         age = age_clr
 #         pt = pt_clr
@@ -1403,8 +1431,11 @@ if __name__ == '__main__':
     
     # 2D-Histograms, Height vs Age 
     print('Plot 2D Histograms - height')
-    hh1_h_clr = (hh_h_clr/np.diff(hh_h_yedges)/hh_h_clr.sum()) * np.diff(hh_h_yedges)
-    hh1_h_cld = (hh_h_cld/np.diff(hh_h_yedges)/hh_h_cld.sum()) * np.diff(hh_h_yedges)
+    hh1_h_clr = (hh_h_clr/np.repeat(np.diff(hh_h_xedges), hh_h_clr.shape[1]).reshape(hh_h_clr.shape[0],hh_h_clr.shape[1])/hh_h_clr.sum())#(hh_p_clr/np.diff(hh_p_xedges)/hh_p_clr.sum())# * np.diff(hh_p_yedges)
+    hh1_h_cld = (hh_h_cld/np.repeat(np.diff(hh_h_xedges), hh_h_cld.shape[1]).reshape(hh_h_cld.shape[0],hh_h_cld.shape[1])/hh_h_cld.sum())
+    
+    # hh1_h_clr = (hh_h_clr/np.diff(hh_h_xedges)/hh_h_clr.sum())# * np.diff(hh_h_yedges)
+    # hh1_h_cld = (hh_h_cld/np.diff(hh_h_xedges)/hh_h_cld.sum())# * np.diff(hh_h_yedges)
     hh2_h_clr = hh_h_clr
     hh2_h_cld = hh_h_cld
     # for ctyp in ['all', 'cld', 'cld_thin', 'clr']:
@@ -1420,13 +1451,15 @@ if __name__ == '__main__':
     elif clType == 'b':
         title_org = '%s pixels' %useType.title()
         figname_end = '%s' %(figname_end)
-        vmax1_cld = 0.001
+        vmax1_cld = 0.0000001
         vmax2_cld = 1000
 #         age = age_cld
 #         height0 = height0_cld
-        vmax1_clr = 0.001
-        vmax2_clr = 50000
+        vmax1_clr = vmax1_cld#0.000001
+        vmax2_clr = 120000
         vmax = 50000
+        vmax_norm = 10e-3#0.00001
+        vmin_norm = 10e-7
 #         age = age_clr
 #         height0 = height0_clr
 #     hh1e, xedges, yedges = np.histogram2d(age[inds] / 86400, pt[inds], bins=[[*range(0,201)], [*range(340,441, 1)]], density=True)
@@ -1439,8 +1472,8 @@ if __name__ == '__main__':
     fig = plt.figure(figsize=(8, 8))
     ax = fig.add_subplot(2,2,1)
     ax.set_title(title_clr)
-    aspect = float('%.2f' %((1.) / ((hh_h_yedges[0] - hh_h_yedges[-1]) / (hh_h_xedges[0] - hh_h_xedges[-1])))) / 2
-    im = ax.imshow(hh1_h_clr.T, origin ='lower', aspect=aspect, extent = [hh_h_xedges[0], hh_h_xedges[-1], hh_h_yedges[0], hh_p_yedges[-1]], vmin=0, vmax=vmax1_clr)
+    aspect = float('%.2f' %((1.) / ((hh_h_yedges[0] - hh_h_yedges[-1]) / (hh_h_xedges[0] - hh_h_xedges[-1]))))
+    im = ax.imshow(hh1_h_clr.T, origin ='lower', aspect=aspect, extent = [hh_h_xedges[0], hh_h_xedges[-1], hh_h_yedges[0], hh_h_yedges[-1]], norm=matplotlib.colors.LogNorm(vmin=vmin_norm, vmax=vmax_norm))#, vmin=0, vmax=vmax1_clr)
 #     ax.plot((np.diff(xedges)/2) + xedges[0:-1], np.argmax(hh1, axis=1)*500+14000, 'r')
     ax.set_ylabel('Height [km]', fontsize='x-large')
     ax.set_yticklabels((ax.get_yticks()/1000).astype(int))
@@ -1448,7 +1481,7 @@ if __name__ == '__main__':
 
     
     ax = fig.add_subplot(2,2,3)
-    im = ax.imshow(hh2_h_clr.T, origin ='lower', aspect=aspect, extent = [hh_h_xedges[0], hh_h_xedges[-1], hh_h_yedges[0], hh_p_yedges[-1]], vmin=0, vmax=vmax2_clr)
+    im = ax.imshow(hh2_h_clr.T, origin ='lower', aspect=aspect, extent = [hh_h_xedges[0], hh_h_xedges[-1], hh_h_yedges[0], hh_h_yedges[-1]], vmin=0, vmax=vmax2_clr)
 #     ax.plot((np.diff(xedges)/2) + xedges[0:-1], np.argmax(hh1, axis=1)*500+14000, 'r')
     ax.set_xlabel('Age [days]', fontsize='x-large')
     ax.set_ylabel('Height [km]', fontsize='x-large')
@@ -1458,67 +1491,80 @@ if __name__ == '__main__':
 
     ax = fig.add_subplot(2,2,2)
     ax.set_title(title_cld)
-    im = ax.imshow(hh1_h_cld.T, origin ='lower', aspect=aspect, extent = [hh_h_xedges[0], hh_h_xedges[-1], hh_h_yedges[0], hh_p_yedges[-1]], vmin=0, vmax=vmax1_cld)
+    im = ax.imshow(hh1_h_cld.T, origin ='lower', aspect=aspect, extent = [hh_h_xedges[0], hh_h_xedges[-1], hh_h_yedges[0], hh_h_yedges[-1]], norm=matplotlib.colors.LogNorm(vmin=vmin_norm, vmax=vmax_norm))#, vmin=0, vmax=vmax1_cld)
     cbar = fig.colorbar(im)#, label='[1 / day]')#, cax=cbar_ax)
     ax.tick_params(labelleft = False)
     
     ax = fig.add_subplot(2,2,4)
-    im = ax.imshow(hh2_h_cld.T, origin ='lower', aspect=aspect, extent = [hh_h_xedges[0], hh_h_xedges[-1], hh_h_yedges[0], hh_p_yedges[-1]], vmin=0, vmax=vmax2_cld)
+    im = ax.imshow(hh2_h_cld.T, origin ='lower', aspect=aspect, extent = [hh_h_xedges[0], hh_h_xedges[-1], hh_h_yedges[0], hh_h_yedges[-1]], vmin=0, vmax=vmax2_cld)
     cbar = fig.colorbar(im)#, label='[1 / day]')#, cax=cbar_ax)
     ax.set_xlabel('Age [days]', fontsize='x-large')
     ax.tick_params(labelleft = False)
     fig.subplots_adjust(right=0.89)
     print(figname)
     fig.savefig(figname + '.png')
-    pdb.set_trace()
 
 #     heightBoundaries = [[None, None], [14,16], [16, 18], [18, 20], [18,19], [19,20]]
-    heightBoundaries = [[None, None], [14,15], [15,16], [16, 17], [17, 18], [18, 19], [19, 20]]
+    # heightBoundaries = [[None, None], [14,15], [15,16], [16, 17], [17, 18], [18, 19], [19, 20]]
     #: https://stackoverflow.com/questions/50611018/cartopy-heatmap-over-openstreetmap-background/50638691
     print('Plot Age Histograms')
     title_org = '%s pixels' %useType.title()
     figname_org = '%s/hist_age_%s' %(plotDir, figname_end)
     for h1, h2 in heightBoundaries:
         if not ((h1 is None) and (h2 is None)):
+            hs_name_end = '_%d_%d' %(h1, h2)
             title = title_org + ', %d - %d km' %(h1, h2)
             figname = figname_org + '_%d-%d' %(h1, h2)
-            if h2 == heightBoundaries[-1][1]:
-                inds_h_cld = (height0_cld >= h1) & (height0_cld <= h2)
-                inds_h_clr = (height0_clr >= h1) & (height0_clr <= h2)
-            else:
-                inds_h_cld = (height0_cld >= h1) & (height0_cld < h2)
-                inds_h_clr = (height0_clr >= h1) & (height0_clr < h2)
-            inds_cld = inds_h_cld
-            inds_clr = inds_h_clr
         else:
+            hs_name_end = ''
             title = title_org
             figname = figname_org
-            inds_cld = np.ones(age_cld.shape[0]).astype(bool)
-            inds_clr = np.ones(age_clr.shape[0]).astype(bool)
-
-        if inds.sum() == 0:
-            continue
-           
+        
+        h1_cld = hs['h_cld%s' %hs_name_end]/np.diff(h_xedges)/hs['h_cld%s' %hs_name_end].sum() * np.diff(h_xedges)
+        h1_clr = hs['h_clr%s' %hs_name_end]/np.diff(h_xedges)/hs['h_clr%s' %hs_name_end].sum() * np.diff(h_xedges)
+        h2_cld = hs['h_cld%s' %hs_name_end]
+        h2_clr = hs['h_clr%s' %hs_name_end]
+        # if not ((h1 is None) and (h2 is None)):
+        #     if h2 == heightBoundaries[-1][1]:
+        #         inds_h_cld = (height0_cld >= h1) & (height0_cld <= h2)
+        #         inds_h_clr = (height0_clr >= h1) & (height0_clr <= h2)
+        #     else:
+        #         inds_h_cld = (height0_cld >= h1) & (height0_cld < h2)
+        #         inds_h_clr = (height0_clr >= h1) & (height0_clr < h2)
+        #     inds_cld = inds_h_cld
+        #     inds_clr = inds_h_clr
+        # else:
+        #     inds_cld = np.ones(age_cld.shape[0]).astype(bool)
+        #     inds_clr = np.ones(age_clr.shape[0]).astype(bool)
+        #
+        # if inds.sum() == 0:
+        #     continue
+        
+#          hist, bins = np.histogram(x, bins=50)
+# plt.show()  
         #: --- Plot ---
         fig = plt.figure()
         ax = fig.add_subplot(2,1,1)
-        # fig.suptitle('Age histogram')
-        h = ax.hist(age_cld[inds_cld] / 86400, bins=range(0,201), density=True, label='Cloudy')
-        h = ax.hist(age_clr[inds_clr] / 86400, bins=range(0,201), density=True, facecolor='r', alpha=0.3, label='Clear')
-        # h = ax.hist(age[hits] / 86400, bins=np.logspace(np.log10(0.001),np.log10(42.0), 400))#bins=400)#, density=True)
-        # ax.set_xscale('log')
-        # fig.gca().set_xscale("log")
-        # ax.set_xlabel('Age [days]')
+        # h = ax.hist(age_cld[inds_cld] / 86400, bins=range(0,201), density=True, label='Cloudy')
+        # h = ax.hist(age_clr[inds_clr] / 86400, bins=range(0,201), density=True, facecolor='r', alpha=0.3, label='Clear')
+        width = 0.7 * np.diff(h_xedges)[0]
+        center = (h_xedges[:-1] + h_xedges[1:]) / 2
+        ax.bar(center, h1_cld, align='center', width=width, label='Cloudy')
+        ax.bar(center, h1_clr, align='center', width=width, facecolor='r', alpha=0.3, label='Clear')
+        
         ax.legend()
         ax.set_title(title)
-        ax.text(0.7, 0.9,'total = %d' %inds.sum(),
-                horizontalalignment='center',
-                verticalalignment='center',
-                transform = ax.transAxes)
+        # ax.text(0.7, 0.9,'total = %d' %inds.sum(),
+        #         horizontalalignment='center',
+        #         verticalalignment='center',
+        #         transform = ax.transAxes)
         ax.set_ylabel('[1 / day]')
         ax = fig.add_subplot(2,1,2)
-        h = ax.hist(age_cld[inds_cld] / 86400, bins=range(0,201), density=True, label='Cloudy')
-        h = ax.hist(age_clr[inds_clr] / 86400, bins=range(0,201), density=True, facecolor='r', alpha=0.3, label='Clear')
+        # h = ax.hist(age_cld[inds_cld] / 86400, bins=range(0,201), density=True, label='Cloudy')
+        # h = ax.hist(age_clr[inds_clr] / 86400, bins=range(0,201), density=True, facecolor='r', alpha=0.3, label='Clear')
+        ax.bar(center, h1_cld, align='center', width=width, label='Cloudy')
+        ax.bar(center, h1_clr, align='center', width=width, facecolor='r', alpha=0.3, label='Clear')
+        
         ax.set_yscale('log')
         ax.set_xlabel('Age [days]')
         ax.legend()
@@ -1528,6 +1574,7 @@ if __name__ == '__main__':
         fig.savefig(figname + '.png')
         plt.close(fig)
 
+        pdb.set_trace()
     
     #: --- Plot ---
     #: trajectory
