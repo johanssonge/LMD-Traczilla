@@ -23,6 +23,7 @@ import datetime
 from selCaliop import readDARDAR
 import os
 import glob
+import sys
 if __name__ == '__main__':
     dirDardar = '/home/ejohansson/Data/Satellite/Cloudsat/DARDAR-MASK.v2.23'
     dirSat = dirDardar
@@ -45,26 +46,32 @@ if __name__ == '__main__':
     d_lon = lons0_mon.reshape(-1, 34)[:, 0]
     d_lat = lats0_mon.reshape(-1, 34)[:, 0]
     
-
     svc_tdiff = svc_mon['svc_tdiff']
     svc_lon = svc_mon['svc_lon']
     svc_lat = svc_mon['svc_lat']
     ti = np.where(svc_tdiff == 0)[0]
 
     redmask = readRedmaskDatetime(dt)
-
+    mask = [redmask['day'] + datetime.timedelta(seconds=int(ist)) for ist in redmask['time']]
+    maskInd = np.argsort(mask)
+    print(np.asarray(mask)[maskInd][54])
+    
+    
+    
     dirday = os.path.join(dirSat, dt.strftime('%Y/%Y_%m_%d'))
     fic = sorted(glob.glob(dirday+'/DARDAR-MASK*.nc'))
     for filename in fic:
         altx, lats, lons, pres, temp, utc, extras = readDARDAR(filename, 'n')
         sel = np.where((lats>latmin) & (lats<latmax))[0][0:-1:10]
+
         lats = lats[sel]
         lons180 = np.where(lons > 180, lons-180, lons)[sel]
-    
         np.where((lats == d_lat[0]) & (lons180 == d_lon[0]))
         lats[0:100] == d_lat[0:100]
         lons180[0:100] == d_lon[0:100]
         pdb.set_trace()
+
+    sys.exit()
     
     fig = plt.figure()
     fig.suptitle('2008-07-03, Time 01:02 - 01:12')
