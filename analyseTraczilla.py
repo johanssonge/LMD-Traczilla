@@ -580,7 +580,10 @@ def addVarToTemp(fn, var_data, var_name):
 
 
 def findSVC(y, m, utc, pf, lon, lat):
+    from pyresample.geometry import SwathDefinition
+    from pyresample.kd_tree import resample_nearest
     svc_mask_hmask = np.zeros([len(utc), 100])
+    svc_rm_mask_hmask = np.zeros([len(utc), 100])
     svc_mask_lat = np.zeros([len(utc)])
     svc_mask_lon = np.zeros([len(utc)])
     svc_mask_time = np.zeros([len(utc)]).astype(datetime.datetime)
@@ -666,8 +669,19 @@ def findSVC(y, m, utc, pf, lon, lat):
             svc_mask_lon[di] = redmask['longitude'][close_ind]
             svc_mask_lat[di] = redmask['latitude'][close_ind]
             svc_mask_space_diff[di] = space_diff[close_ind]
+            
         print(time.time() - tic)
-    
+        
+        #: Try another way to do the same.
+        tic = time.time()
+        dardar_swath_def = SwathDefinition(lon[day_ind], lat[day_ind])
+        svc_swath_def = SwathDefinition(redmask['longitude'], redmask['latitude'])
+        rm_hmask = resample_nearest(svc_swath_def, redmask['hmask'], dardar_swath_def,
+                                  radius_of_influence=20000, fill_value=None)
+        print(time.time() - tic)
+        svc_rm_mask_hmask[day_ind, :] = rm_hmask
+        
+    svc_rm_mask_hmask[(used_utc  == 0), :] = -9999
     svc_mask_hmask[(used_utc  == 0), :] = -9999
     svc_mask_lon[(used_utc  == 0)] = -9999
     svc_mask_lat[(used_utc  == 0)] = -9999
@@ -694,7 +708,7 @@ def getInitFiles(mD, y, m, dn, uD, lt=True, ct=True):
             print('Add irs to tempfile')
             pf = readidx107(os.path.join(trajDir,'part_000'),quiet=False)
             utc = convertIrStartToUTC(pf, reshape_col=34)
-            svc_hmask, svc_lon, svc_lat, svc_tdiff, svc_sdiff, svc, svc_height = findSVC(y, m, utc, pf, lons0_mon, lats0_mon)  # @UnusedVariable
+            svc_hmask, svc_lon, svc_lat, svc_tdiff, svc_sdiff, svc, svc_height = findSVC(y, m, utc, pf, lons0_mon.reshape(-1, 34)[:,0], lats0_mon.reshape(-1, 34)[:,0])  # @UnusedVariable
             addVarToTemp(tempname, svc_hmask, 'svc_hmask')
             addVarToTemp(tempname, svc_lon, 'svc_lon')
             addVarToTemp(tempname, svc_lat, 'svc_lat')
@@ -937,13 +951,13 @@ def readTempFileInit(fn):
     iwc0 = h5f['iwc0'][:]
     
     #: updating the tempfiles with new variables
-    if 'ir_start' in h5f.keys():
-        irs = h5f['ir_start'][:]
-        svc = {'svc_hmask': h5f['svc_hmask'][:], 'svc_lon': h5f['svc_lon'][:], \
-               'svc_lat': h5f['svc_lat'][:], 'svc_tdiff': h5f['svc_tdiff'][:], \
-               'ir_start': h5f['ir_start'][:], 'stamp_date': h5f['stamp_date'][:], \
-               'svc_sdiff': h5f['svc_sdiff'][:]}
-    else:
+#     if 'ir_start' in h5f.keys():
+#         irs = h5f['ir_start'][:]
+#         svc = {'svc_hmask': h5f['svc_hmask'][:], 'svc_lon': h5f['svc_lon'][:], \
+#                'svc_lat': h5f['svc_lat'][:], 'svc_tdiff': h5f['svc_tdiff'][:], \
+#                'ir_start': h5f['ir_start'][:], 'stamp_date': h5f['stamp_date'][:], \
+#                'svc_sdiff': h5f['svc_sdiff'][:]}
+#     else:
     irs = None
     svc = None
     
