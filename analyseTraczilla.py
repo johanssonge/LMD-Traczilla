@@ -689,7 +689,7 @@ def findSVC(y, m, utc, pf, lon, lat):
     svc_mask_time_diff[(used_utc  == 0)] = -9999
     svc_mask_space_diff[(used_utc  == 0)] = -9999
     print('done with SVC')
-    return svc_mask_hmask, svc_mask_lon, svc_mask_lat, svc_mask_time_diff, svc_mask_space_diff, svc_mask_time, redmask['height']
+    return svc_rm_mask_hmask, svc_mask_hmask, svc_mask_lon, svc_mask_lat, svc_mask_time_diff, svc_mask_space_diff, svc_mask_time, redmask['height']
 
 
 def getInitFiles(mD, y, m, dn, uD, lt=True, ct=True):
@@ -708,7 +708,8 @@ def getInitFiles(mD, y, m, dn, uD, lt=True, ct=True):
             print('Add irs to tempfile')
             pf = readidx107(os.path.join(trajDir,'part_000'),quiet=False)
             utc = convertIrStartToUTC(pf, reshape_col=34)
-            svc_hmask, svc_lon, svc_lat, svc_tdiff, svc_sdiff, svc, svc_height = findSVC(y, m, utc, pf, lons0_mon.reshape(-1, 34)[:,0], lats0_mon.reshape(-1, 34)[:,0])  # @UnusedVariable
+            svc_rm_hmask, svc_hmask, svc_lon, svc_lat, svc_tdiff, svc_sdiff, svc, svc_height = findSVC(y, m, utc, pf, lons0_mon.reshape(-1, 34)[:,0], lats0_mon.reshape(-1, 34)[:,0])  # @UnusedVariable
+            addVarToTemp(tempname, svc_rm_hmask, 'svc_rm_hmask')
             addVarToTemp(tempname, svc_hmask, 'svc_hmask')
             addVarToTemp(tempname, svc_lon, 'svc_lon')
             addVarToTemp(tempname, svc_lat, 'svc_lat')
