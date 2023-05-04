@@ -570,22 +570,22 @@ def addVarToTemp(fn, var_data, var_name):
     h5file = h5py.File(fn, 'a')
     if var_name in h5file.keys():
         print('%s already exist in tempfile' %var_name)
+        del h5file[var_name]
+    try:
+        h5file.create_dataset(var_name, data = var_data)
+    except:
+        print('H5 kan ej spara')
         pdb.set_trace()
-    else:
-        try:
-            h5file.create_dataset(var_name, data = var_data)
-        except:
-            print('H5 kan ej spara')
-            pdb.set_trace()
     h5file.close()
 
 
-def findSVC(y, m, utc, pf, mon0_lon, mon0_lat):
+def findSVC(y, m, utc, pf, lon, lat):
     svc_mask_hmask = np.zeros([len(utc), 100])
     svc_mask_lat = np.zeros([len(utc)])
     svc_mask_lon = np.zeros([len(utc)])
     svc_mask_time = np.zeros([len(utc)]).astype(datetime.datetime)
     svc_mask_time_diff = np.zeros([len(utc)])
+    svc_mask_space_diff = np.zeros([len(utc)])
     used_utc = np.zeros([len(utc)])
 
     #: Redmask is updated in days while data from flexpart is monthly
@@ -648,6 +648,7 @@ def findSVC(y, m, utc, pf, mon0_lon, mon0_lat):
         tic = time.time()
         for di in np.where(day_ind)[0]:
             utctid = utc[di]
+            space_diff = np.sqrt((redmask['longitude'] - lon[di])**2 + (redmask['latitude'] - lat[di])**2)
             if (len(redmask['time']) == 1) and np.isnan(redmask['time'][0]):
                 close_ind = 0
                 #: This one needs to be for each hight
@@ -656,20 +657,25 @@ def findSVC(y, m, utc, pf, mon0_lon, mon0_lat):
                 #: can not take .total_seconds() on a nan value
                 svc_mask_time_diff[di] = redmask['time'][close_ind]
             else:
-                close_ind = nearest_ind(redmask['time'], utctid)
+#                 close_ind = nearest_ind(redmask['time'], utctid)
+                close_ind = np.argmin(space_diff)
+                
                 svc_mask_hmask[di, :] = redmask['hmask'][close_ind, :]
                 svc_mask_time_diff[di] = (utctid - redmask['time'][close_ind]).total_seconds()
             svc_mask_time[di] = redmask['time'][close_ind]
             svc_mask_lon[di] = redmask['longitude'][close_ind]
             svc_mask_lat[di] = redmask['latitude'][close_ind]
+            svc_mask_space_diff[di] = space_diff[close_ind]
         print(time.time() - tic)
+    
     svc_mask_hmask[(used_utc  == 0), :] = -9999
     svc_mask_lon[(used_utc  == 0)] = -9999
     svc_mask_lat[(used_utc  == 0)] = -9999
-    svc_mask_time_diff[(used_utc  == 0)] = -9999
     svc_mask_time[(used_utc  == 0)] = -9999
+    svc_mask_time_diff[(used_utc  == 0)] = -9999
+    svc_mask_space_diff[(used_utc  == 0)] = -9999
     print('done with SVC')
-    return svc_mask_hmask, svc_mask_lon, svc_mask_lat, svc_mask_time_diff, svc_mask_time
+    return svc_mask_hmask, svc_mask_lon, svc_mask_lat, svc_mask_time_diff, svc_mask_space_diff, svc_mask_time, redmask['height']
 
 
 def getInitFiles(mD, y, m, dn, uD, lt=True, ct=True):
@@ -683,17 +689,19 @@ def getInitFiles(mD, y, m, dn, uD, lt=True, ct=True):
     
     tempname = os.path.join(mD,'TempFiles', '%s-init.h5' %(outname))
     if (lt and os.path.isfile(tempname)):
-        lons0_mon, lats0_mon, p0_mon, t0_mon, sh_mon, vod_mon, height_mon, cm_mon, sc_mon, rvs0_mon, iwc0_mon, irs_mon, svc_mon = readTempFileInit(tempname)
+        lons0_mon, lats0_mon, p0_mon, t0_mon, sh_mon, vod_mon, height_mon, cm_mon, sc_mon, rvs0_mon, iwc0_mon, irs_mon, svc_mon = readTempFileInit(tempname)  # @UnusedVariable
         if (irs_mon is None) and (y in [2007, 2008, 2009, 2010]):
             print('Add irs to tempfile')
             pf = readidx107(os.path.join(trajDir,'part_000'),quiet=False)
             utc = convertIrStartToUTC(pf, reshape_col=34)
-            svc_hmask, svc_lon, svc_lat, svc_tdiff, svc = findSVC(y, m, utc, pf, lons0_mon, lats0_mon)
+            svc_hmask, svc_lon, svc_lat, svc_tdiff, svc_sdiff, svc, svc_height = findSVC(y, m, utc, pf, lons0_mon, lats0_mon)  # @UnusedVariable
             addVarToTemp(tempname, svc_hmask, 'svc_hmask')
             addVarToTemp(tempname, svc_lon, 'svc_lon')
             addVarToTemp(tempname, svc_lat, 'svc_lat')
             addVarToTemp(tempname, svc_tdiff, 'svc_tdiff')
+            addVarToTemp(tempname, svc_sdiff, 'svc_sdiff')
 #             addVarToTemp(tempname, svc_utc, 'svc_utc')
+            addVarToTemp(tempname, svc_height, 'svc_height')
             addVarToTemp(tempname, pf['ir_start'], 'ir_start')
             addVarToTemp(tempname, [pf['stamp_date']], 'stamp_date')
             print('SVC is added to the tempfile')
@@ -933,10 +941,11 @@ def readTempFileInit(fn):
         irs = h5f['ir_start'][:]
         svc = {'svc_hmask': h5f['svc_hmask'][:], 'svc_lon': h5f['svc_lon'][:], \
                'svc_lat': h5f['svc_lat'][:], 'svc_tdiff': h5f['svc_tdiff'][:], \
-               'ir_start': h5f['ir_start'][:], 'stamp_date': h5f['stamp_date'][:]}
+               'ir_start': h5f['ir_start'][:], 'stamp_date': h5f['stamp_date'][:], \
+               'svc_sdiff': h5f['svc_sdiff'][:]}
     else:
-        irs = None
-        svc = None
+    irs = None
+    svc = None
     
     
     h5f.close()
@@ -1106,13 +1115,14 @@ if __name__ == '__main__':
             y  = y + 1
             
             histTempFile = '%s/TempFiles/Hist/histTemp-%s-%d%02d-n-DD.h5' %(mainDir, area, year, mon)
-            if os.path.isfile(histTempFile) and (lt == True):
+            if False:#os.path.isfile(histTempFile) and (lt == True):
                 
                 #: All edges ned cld to fit with the names used when not reaing from a tempfile
                 hh_h_cld_mon, hh_h_clr_mon, hh_p_cld_mon, hh_p_clr_mon, hh_h_cld_xedges, hh_h_cld_yedges, hh_p_cld_xedges, hh_p_cld_yedges, h_cld_xedges, hs_mon = readTempFileHist(histTempFile, heightBoundaries)
             else:
                 tic=time.time()
                 outnames, lons0_mon, lats0_mon, p0_mon, t0_mon, sh0_mon, vod0_mon, height0_mon, cm0_mon, sc0_mon, rvs0_mon, iwc0_mon = getInitFiles(mainDir, year, mon, dn, useDardar, lt=lt)
+                pdb.set_trace()
                 if args.temp:
                     continue
                 
@@ -1187,10 +1197,10 @@ if __name__ == '__main__':
                 ptC_clr = ptC_mon[useInds_clr]
                 
                 #: For the map
-                map_0_cld_mon, map_0_cld_xedges, map_0_cld_yedges = np.histogram2d(lons0_cld, lats0_cld, bins=[180, 90])
-                map_0_clr_mon, map_0_clr_xedges, map_0_clr_yedges = np.histogram2d(lons0_clr, lats0_clr, bins=[180, 90])
-                map_c_cld_mon, map_c_cld_xedges, map_c_cld_yedges = np.histogram2d(lonsC_cld, latsC_cld, bins=[180, 90])
-                map_c_clr_mon, map_c_clr_xedges, map_c_clr_yedges = np.histogram2d(lonsC_clr, latsC_clr, bins=[180, 90])
+                map_0_cld_mon, map_0_cld_xedges, map_0_cld_yedges = np.histogram2d(lons0_cld, lats0_cld, bins=[[*range(-180,181)], [*range(-30,46)]])
+                map_0_clr_mon, map_0_clr_xedges, map_0_clr_yedges = np.histogram2d(lons0_clr, lats0_clr, bins=[[*range(-180,181)], [*range(-30,46)]])
+                map_c_cld_mon, map_c_cld_xedges, map_c_cld_yedges = np.histogram2d(lonsC_cld, latsC_cld, bins=[[*range(-180,181)], [*range(-90,91)]])
+                map_c_clr_mon, map_c_clr_xedges, map_c_clr_yedges = np.histogram2d(lonsC_clr, latsC_clr, bins=[[*range(-180,181)], [*range(-90,91)]])
                 pdb.set_trace()
                 sys.exit()
                 
@@ -1228,8 +1238,10 @@ if __name__ == '__main__':
                 h5f = h5py.File(histTempFile, 'w')
                 
                 #: All edges are the same so jut save one
-                h5f.create_dataset('map_xedges', data = map_0_cld_xedges)
-                h5f.create_dataset('map_yedges', data = map_0_cld_yedges)
+                h5f.create_dataset('map_0_xedges', data = map_0_cld_xedges)
+                h5f.create_dataset('map_0_yedges', data = map_0_cld_yedges)
+                h5f.create_dataset('map_c_xedges', data = map_c_cld_xedges)
+                h5f.create_dataset('map_c_yedges', data = map_c_cld_yedges)
                 h5f.create_dataset('map_0_cld', data = map_0_cld_mon)
                 h5f.create_dataset('map_0_clr', data = map_0_clr_mon)
                 h5f.create_dataset('map_c_cld', data = map_c_cld_mon)
@@ -1249,12 +1261,14 @@ if __name__ == '__main__':
                     h5f.create_dataset(arrname, data = arrdata)
                 h5f.close()
             if y == 0:
-                # map_xedges = map_0_cld_xedges
-                # map_yedges = map_0_cld_yedges
-                # map_0_cld = map_0_cld_mon
-                # map_0_clr = map_0_clr_mon
-                # map_c_cld = map_c_cld_mon
-                # map_c_clr = map_c_clr_mon
+                map_0_xedges = map_0_cld_xedges
+                map_0_yedges = map_0_cld_yedges
+                map_c_xedges = map_c_cld_xedges
+                map_c_yedges = map_c_cld_yedges
+                map_0_cld = map_0_cld_mon
+                map_0_clr = map_0_clr_mon
+                map_c_cld = map_c_cld_mon
+                map_c_clr = map_c_clr_mon
                 hh_h_cld = hh_h_cld_mon
                 hh_h_clr = hh_h_clr_mon
                 hh_p_cld = hh_p_cld_mon
@@ -1266,10 +1280,10 @@ if __name__ == '__main__':
                 h_xedges = h_cld_xedges
                 hs = hs_mon.copy()
             else:
-                # map_0_cld = map_0_cld + map_0_cld_mon
-                # map_0_clr = map_0_clr + map_0_clr_mon
-                # map_c_cld = map_c_cld + map_c_cld_mon
-                # map_c_clr = map_c_clr + map_c_clr_mon
+                map_0_cld = map_0_cld + map_0_cld_mon
+                map_0_clr = map_0_clr + map_0_clr_mon
+                map_c_cld = map_c_cld + map_c_cld_mon
+                map_c_clr = map_c_clr + map_c_clr_mon
                 hh_h_cld = hh_h_cld + hh_h_cld_mon
                 hh_h_clr = hh_h_clr + hh_h_clr_mon
                 hh_p_cld = hh_p_cld + hh_p_cld_mon
