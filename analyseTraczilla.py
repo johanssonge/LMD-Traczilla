@@ -951,16 +951,16 @@ def readTempFileInit(fn):
     rvs0 = h5f['rvs0'][:]
     iwc0 = h5f['iwc0'][:]
     
-    #: updating the tempfiles with new variables
-#     if 'ir_start' in h5f.keys():
-#         irs = h5f['ir_start'][:]
-#         svc = {'svc_hmask': h5f['svc_hmask'][:], 'svc_lon': h5f['svc_lon'][:], \
-#                'svc_lat': h5f['svc_lat'][:], 'svc_tdiff': h5f['svc_tdiff'][:], \
-#                'ir_start': h5f['ir_start'][:], 'stamp_date': h5f['stamp_date'][:], \
-#                'svc_sdiff': h5f['svc_sdiff'][:]}
-#     else:
-    irs = None
-    svc = None
+    #: updated tempfiles with new variables
+    if 'ir_start' in h5f.keys():
+        irs = h5f['ir_start'][:]
+        svc = {'svc_hmask': h5f['svc_hmask'][:], 'svc_rm_hmask': h5f['svc_rm_hmask'][:], \
+               'svc_lon': h5f['svc_lon'][:], 'svc_lat': h5f['svc_lat'][:], \
+               'svc_tdiff': h5f['svc_tdiff'][:], 'svc_sdiff': h5f['svc_sdiff'][:], \
+               'ir_start': h5f['ir_start'][:], 'stamp_date': h5f['stamp_date'][:]}
+    else:
+        irs = None
+        svc = None
     
     
     h5f.close()
